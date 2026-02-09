@@ -1,12 +1,20 @@
-# build
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY frontend/package*.json frontend/
-RUN cd frontend && npm ci
-COPY frontend frontend
-RUN cd frontend && npm run build
+FROM python:3.13-slim
 
-# serve
-FROM nginx:alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/frontend/dist /usr/share/nginx/html
+WORKDIR /app
+
+# System deps (optional but useful later)
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/main.py ./main.py
+COPY openclaw ./openclaw
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

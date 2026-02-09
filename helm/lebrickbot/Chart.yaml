@@ -1,0 +1,5 @@
+apiVersion: v2
+name: lebrickbot
+description: Expert DevOps Engineer as a Service (Private)
+type: application
+version: 0.1.0

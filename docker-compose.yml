@@ -1,10 +1,11 @@
+
 services:
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lebrickbot-backend
     ports:
       - "8000:8000"
 
-  frontend:
-    build: .
-    ports:
       - "8080:80"

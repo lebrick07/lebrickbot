@@ -1,0 +1,9 @@
+image:
+  backend: lebrickbot-backend:latest
+  frontend: lebrickbot-frontend:latest
+
+github:
+  enabled: true
+
+aws:
+  roleArn: ""
