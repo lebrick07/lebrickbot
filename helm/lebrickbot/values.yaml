@@ -1,6 +1,29 @@
-image:
-  backend: lebrickbot-backend:latest
-  frontend: lebrickbot-frontend:latest
+backend:
+  image:
+    repository: ghcr.io/lebrick07/lebrickbot-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 8000
+
+frontend:
+  image:
+    repository: ghcr.io/lebrick07/lebrickbot-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 80
+
+ingress:
+  enabled: true
+  className: traefik
+  host: openbrick.local
+  path: /
+  pathType: Prefix
 
 github:
   enabled: true
