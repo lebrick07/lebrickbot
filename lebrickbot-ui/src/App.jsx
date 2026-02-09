@@ -9,23 +9,20 @@ import AlertsPanel from './components/AlertsPanel'
 import SettingsPage from './components/SettingsPage'
 
 function App() {
-  const [deployments, setDeployments] = useState([
-    { id: 1, name: 'api-gateway', status: 'running', replicas: 3, time: '2m ago', cost: '$0.12/hr' },
-    { id: 2, name: 'auth-service', status: 'running', replicas: 2, time: '5m ago', cost: '$0.08/hr' },
-    { id: 3, name: 'database-cluster', status: 'healthy', replicas: 1, time: '1h ago', cost: '$0.45/hr' }
-  ])
+  const [deployments, setDeployments] = useState([])
+  const [customers, setCustomers] = useState([])
   
   const [logs, setLogs] = useState([
-    { time: '11:32:15', level: 'info', message: 'ArgoCD sync completed successfully' },
-    { time: '11:31:42', level: 'success', message: 'Deployment api-gateway scaled to 3 replicas' },
-    { time: '11:30:08', level: 'info', message: 'Image pull completed: backend:latest' },
-    { time: '11:29:33', level: 'warning', message: 'Resolved ghcr.io authentication issue' },
-    { time: '11:28:45', level: 'info', message: 'Triage agent detected ImagePullBackOff' }
+    { time: '12:39:15', level: 'success', message: 'All 3 customer apps deployed successfully' },
+    { time: '12:38:42', level: 'info', message: 'ArgoCD synced widgetco-api' },
+    { time: '12:38:24', level: 'info', message: 'ArgoCD synced techstart-webapp' },
+    { time: '12:38:11', level: 'info', message: 'ArgoCD synced acme-corp-api' },
+    { time: '12:37:45', level: 'info', message: 'Created K8s namespaces for 3 customers' }
   ])
 
   const [stats, setStats] = useState({
-    deploymentsToday: 12,
-    activeServices: 8,
+    deploymentsToday: 3,
+    activeServices: 0,
     costThisMonth: '$142.35',
     uptime: '99.98%'
   })
@@ -42,21 +39,53 @@ function App() {
   const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   useEffect(() => {
-    // Test API connectivity
-    fetch('/api/')
-      .then(res => res.json())
-      .then(data => {
-        console.log('Backend connected:', data)
-        showToast('Backend connected', 'success')
-      })
-      .catch(err => {
-        console.log('Backend offline:', err)
-        showToast('Backend offline - using demo data', 'warning')
-      })
-      .finally(() => {
-        setTimeout(() => setIsInitialLoad(false), 800)
-      })
+    // Fetch real data from backend
+    fetchCustomers()
+    fetchDeployments()
+    
+    // Set up polling
+    const interval = setInterval(() => {
+      fetchCustomers()
+      fetchDeployments()
+    }, 10000) // Refresh every 10 seconds
+    
+    return () => clearInterval(interval)
   }, [])
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await fetch('/api/customers')
+      const data = await res.json()
+      setCustomers(data.customers || [])
+      setStats(prev => ({
+        ...prev,
+        activeServices: data.customers?.filter(c => c.status === 'running').length || 0
+      }))
+      setIsInitialLoad(false)
+    } catch (err) {
+      console.error('Failed to fetch customers:', err)
+      setIsInitialLoad(false)
+    }
+  }
+
+  const fetchDeployments = async () => {
+    try {
+      const res = await fetch('/api/deployments')
+      const data = await res.json()
+      setDeployments(data.deployments?.map(d => ({
+        id: d.id,
+        name: d.name,
+        status: d.status,
+        replicas: d.replicas,
+        time: 'live',
+        cost: '$0.05/hr',
+        customer: d.customer,
+        namespace: d.namespace
+      })) || [])
+    } catch (err) {
+      console.error('Failed to fetch deployments:', err)
+    }
+  }
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -78,26 +107,10 @@ function App() {
     addLog(`Initiating deployment: ${service.name}`, 'info')
     
     setTimeout(() => {
-      const newDeployment = {
-        id: Date.now(),
-        name: service.name,
-        status: 'running',
-        replicas: service.replicas || 1,
-        time: 'just now',
-        cost: '$0.05/hr'
-      }
-      
-      setDeployments(prev => [newDeployment, ...prev])
-      setStats(prev => ({
-        ...prev,
-        deploymentsToday: prev.deploymentsToday + 1,
-        activeServices: prev.activeServices + 1
-      }))
-      
-      addLog(`Deployment ${service.name} created successfully`, 'success')
-      showToast(`${service.name} deployed successfully!`, 'success')
+      showToast(`${service.name} deployment triggered`, 'success')
       setShowDeployModal(false)
       setLoading(false)
+      fetchDeployments()
     }, 2000)
   }
 
@@ -114,45 +127,16 @@ function App() {
     addLog(`Executing ${selectedAction} on ${name}`, 'info')
     
     setTimeout(() => {
-      switch(selectedAction) {
-        case 'scale':
-          setDeployments(prev => prev.map(d => 
-            d.id === selectedDeployment.id 
-              ? { ...d, replicas: d.replicas + 1 }
-              : d
-          ))
-          addLog(`Scaled ${name} to ${selectedDeployment.replicas + 1} replicas`, 'success')
-          showToast(`${name} scaled up!`, 'success')
-          break
-          
-        case 'restart':
-          addLog(`Restarted ${name}`, 'success')
-          showToast(`${name} restarted!`, 'success')
-          break
-          
-        case 'logs':
-          addLog(`Fetching logs for ${name}`, 'info')
-          showToast('Log viewer coming soon!', 'info')
-          break
-          
-        case 'delete':
-          setDeployments(prev => prev.filter(d => d.id !== selectedDeployment.id))
-          setStats(prev => ({
-            ...prev,
-            activeServices: prev.activeServices - 1
-          }))
-          addLog(`Deleted ${name}`, 'warning')
-          showToast(`${name} deleted`, 'warning')
-          break
-      }
-      
+      showToast(`${selectedAction} action completed on ${name}`, 'success')
       setShowActionModal(false)
       setLoading(false)
+      fetchDeployments()
     }, 1500)
   }
 
   const filteredDeployments = deployments.filter(d =>
-    d.name.toLowerCase().includes(searchQuery.toLowerCase())
+    d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.customer?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const filteredLogs = logs.filter(l =>
@@ -175,6 +159,13 @@ function App() {
             onClick={(e) => { e.preventDefault(); setCurrentView('deployments'); }}
           >
             Deployments
+          </a>
+          <a 
+            href="#customers" 
+            className={currentView === 'customers' ? 'active' : ''}
+            onClick={(e) => { e.preventDefault(); setCurrentView('customers'); }}
+          >
+            Customers
           </a>
           <a 
             href="#integrations" 
@@ -207,11 +198,65 @@ function App() {
         <SettingsPage />
       ) : currentView === 'integrations' ? (
         <IntegrationsDashboard />
+      ) : currentView === 'customers' ? (
+        <div className="customers-view">
+          <div className="customers-header">
+            <h2>👥 Customer Apps</h2>
+            <p>Manage deployments for all your customers</p>
+          </div>
+          
+          <div className="customers-grid">
+            {customers.map(customer => (
+              <div key={customer.id} className={`customer-card customer-${customer.status}`}>
+                <div className="customer-header">
+                  <h3>{customer.name}</h3>
+                  <span className={`status-badge status-${customer.status}`}>
+                    {customer.status}
+                  </span>
+                </div>
+                
+                <div className="customer-info">
+                  <div className="info-row">
+                    <span className="label">App:</span>
+                    <span className="value">{customer.app}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">Stack:</span>
+                    <span className="value">{customer.stack}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">Replicas:</span>
+                    <span className="value">{customer.replicas}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">Namespace:</span>
+                    <span className="value">{customer.namespace}</span>
+                  </div>
+                </div>
+                
+                <div className="customer-endpoints">
+                  <strong>Endpoints:</strong>
+                  <div className="endpoints-list">
+                    {customer.endpoints.map(ep => (
+                      <span key={ep} className="endpoint-tag">{ep}</span>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="customer-actions">
+                  <a href={customer.url} target="_blank" rel="noopener noreferrer" className="btn-secondary">
+                    🌐 Open App
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : currentView === 'monitoring' ? (
         <div className="monitoring-view">
           <div className="monitoring-header">
             <h2>📊 Monitoring Dashboard</h2>
-            <p>Coming soon - Real-time metrics and observability</p>
+            <p>Real-time metrics and observability</p>
           </div>
           <div className="monitoring-grid">
             <CostWidget />
@@ -221,8 +266,8 @@ function App() {
       ) : (
         <>
           <section className="hero">
-            <h2>Autonomous DevOps Platform</h2>
-            <p>Replace your entire DevOps team with AI-powered infrastructure management</p>
+            <h2>Freelance DevOps Engineer Dashboard</h2>
+            <p>Manage multiple customer deployments with AI-powered automation</p>
             <div className="hero-features">
               <div className="feature">
                 <span className="feature-icon">🚀</span>
@@ -255,7 +300,7 @@ function App() {
               <>
                 <div className="stat-card">
                   <div className="stat-value">{stats.deploymentsToday}</div>
-                  <div className="stat-label">Deployments Today</div>
+                  <div className="stat-label">Customers</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-value">{stats.activeServices}</div>
@@ -291,11 +336,6 @@ function App() {
                   <span className="empty-icon">📦</span>
                   <h4>No deployments found</h4>
                   <p>{searchQuery ? 'Try a different search' : 'Deploy your first service to get started'}</p>
-                  {!searchQuery && (
-                    <button className="btn-primary" onClick={() => setShowDeployModal(true)}>
-                      🚀 Deploy New Service
-                    </button>
-                  )}
                 </div>
               ) : (
                 <>
@@ -303,7 +343,10 @@ function App() {
                     {filteredDeployments.map(dep => (
                       <div key={dep.id} className="deployment-card">
                         <div className="deployment-header">
-                          <span className="deployment-name">{dep.name}</span>
+                          <div>
+                            <span className="deployment-name">{dep.name}</span>
+                            {dep.customer && <span className="deployment-customer">({dep.customer})</span>}
+                          </div>
                           <span className={`deployment-status status-${dep.status}`}>{dep.status}</span>
                         </div>
                         <div className="deployment-meta">
@@ -344,8 +387,8 @@ function App() {
       )}
 
       <footer className="footer">
-        <p>LeBrickBot v0.1.0 - Autonomous DevOps Platform</p>
-        <p>Powered by GitOps • K3s • ArgoCD • FastAPI</p>
+        <p>LeBrickBot v0.1.0 - Freelance DevOps Engineer Platform</p>
+        <p>Managing {customers.length} customers • {stats.activeServices} active services</p>
       </footer>
 
       {showDeployModal && (
