@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+import DeployModal from './components/DeployModal'
+import ActionModal from './components/ActionModal'
+import Toast from './components/Toast'
 
 function App() {
   const [deployments, setDeployments] = useState([
-    { id: 1, name: 'api-gateway', status: 'running', time: '2m ago', cost: '$0.12/hr' },
-    { id: 2, name: 'auth-service', status: 'running', time: '5m ago', cost: '$0.08/hr' },
-    { id: 3, name: 'database-cluster', status: 'healthy', time: '1h ago', cost: '$0.45/hr' }
+    { id: 1, name: 'api-gateway', status: 'running', replicas: 3, time: '2m ago', cost: '$0.12/hr' },
+    { id: 2, name: 'auth-service', status: 'running', replicas: 2, time: '5m ago', cost: '$0.08/hr' },
+    { id: 3, name: 'database-cluster', status: 'healthy', replicas: 1, time: '1h ago', cost: '$0.45/hr' }
   ])
   
   const [logs, setLogs] = useState([
@@ -23,16 +26,123 @@ function App() {
     uptime: '99.98%'
   })
 
+  const [showDeployModal, setShowDeployModal] = useState(false)
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [selectedDeployment, setSelectedDeployment] = useState(null)
+  const [selectedAction, setSelectedAction] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [loading, setLoading] = useState(false)
+
   useEffect(() => {
     // Test API connectivity
     fetch('/api/')
       .then(res => res.json())
-      .then(data => console.log('Backend connected:', data))
-      .catch(err => console.log('Backend offline:', err))
+      .then(data => {
+        console.log('Backend connected:', data)
+        showToast('Backend connected', 'success')
+      })
+      .catch(err => {
+        console.log('Backend offline:', err)
+        showToast('Backend offline - using demo data', 'warning')
+      })
   }, [])
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  const addLog = (message, level = 'info') => {
+    const now = new Date()
+    const time = now.toLocaleTimeString('en-US', { hour12: false })
+    setLogs(prev => [{ time, level, message }, ...prev].slice(0, 20))
+  }
+
+  const handleDeploy = async (service) => {
+    setLoading(true)
+    addLog(`Initiating deployment: ${service.name}`, 'info')
+    
+    // Simulate API call
+    setTimeout(() => {
+      const newDeployment = {
+        id: Date.now(),
+        name: service.name,
+        status: 'running',
+        replicas: service.replicas || 1,
+        time: 'just now',
+        cost: '$0.05/hr'
+      }
+      
+      setDeployments(prev => [newDeployment, ...prev])
+      setStats(prev => ({
+        ...prev,
+        deploymentsToday: prev.deploymentsToday + 1,
+        activeServices: prev.activeServices + 1
+      }))
+      
+      addLog(`Deployment ${service.name} created successfully`, 'success')
+      showToast(`${service.name} deployed successfully!`, 'success')
+      setShowDeployModal(false)
+      setLoading(false)
+    }, 2000)
+  }
+
+  const handleAction = (deployment, action) => {
+    setSelectedDeployment(deployment)
+    setSelectedAction(action)
+    setShowActionModal(true)
+  }
+
+  const executeAction = async () => {
+    setLoading(true)
+    const { name } = selectedDeployment
+    
+    addLog(`Executing ${selectedAction} on ${name}`, 'info')
+    
+    // Simulate API call
+    setTimeout(() => {
+      switch(selectedAction) {
+        case 'scale':
+          setDeployments(prev => prev.map(d => 
+            d.id === selectedDeployment.id 
+              ? { ...d, replicas: d.replicas + 1 }
+              : d
+          ))
+          addLog(`Scaled ${name} to ${selectedDeployment.replicas + 1} replicas`, 'success')
+          showToast(`${name} scaled up!`, 'success')
+          break
+          
+        case 'restart':
+          addLog(`Restarted ${name}`, 'success')
+          showToast(`${name} restarted!`, 'success')
+          break
+          
+        case 'logs':
+          addLog(`Fetching logs for ${name}`, 'info')
+          showToast('Log viewer coming soon!', 'info')
+          break
+          
+        case 'delete':
+          setDeployments(prev => prev.filter(d => d.id !== selectedDeployment.id))
+          setStats(prev => ({
+            ...prev,
+            activeServices: prev.activeServices - 1
+          }))
+          addLog(`Deleted ${name}`, 'warning')
+          showToast(`${name} deleted`, 'warning')
+          break
+      }
+      
+      setShowActionModal(false)
+      setLoading(false)
+    }, 1500)
+  }
 
   return (
     <div className="dashboard">
+      {/* Toast Notifications */}
+      {toast && <Toast message={toast.message} type={toast.type} />}
+
       {/* Header */}
       <header className="header">
         <div className="logo">
@@ -105,12 +215,29 @@ function App() {
                 </div>
                 <div className="deployment-meta">
                   <span className="deployment-time">⏱ {dep.time}</span>
+                  <span className="deployment-replicas">📦 {dep.replicas} replica{dep.replicas > 1 ? 's' : ''}</span>
                   <span className="deployment-cost">💰 {dep.cost}</span>
+                </div>
+                <div className="deployment-actions">
+                  <button className="action-btn action-scale" onClick={() => handleAction(dep, 'scale')} title="Scale Up">
+                    ⬆️
+                  </button>
+                  <button className="action-btn action-restart" onClick={() => handleAction(dep, 'restart')} title="Restart">
+                    🔄
+                  </button>
+                  <button className="action-btn action-logs" onClick={() => handleAction(dep, 'logs')} title="View Logs">
+                    📋
+                  </button>
+                  <button className="action-btn action-delete" onClick={() => handleAction(dep, 'delete')} title="Delete">
+                    🗑️
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-          <button className="btn-primary">Deploy New Service</button>
+          <button className="btn-primary" onClick={() => setShowDeployModal(true)}>
+            🚀 Deploy New Service
+          </button>
         </section>
 
         {/* Activity Logs */}
@@ -133,6 +260,25 @@ function App() {
         <p>LeBrickBot v0.1.0 - Autonomous DevOps Platform</p>
         <p>Powered by GitOps • K3s • ArgoCD • FastAPI</p>
       </footer>
+
+      {/* Modals */}
+      {showDeployModal && (
+        <DeployModal 
+          onClose={() => setShowDeployModal(false)}
+          onDeploy={handleDeploy}
+          loading={loading}
+        />
+      )}
+
+      {showActionModal && selectedDeployment && (
+        <ActionModal
+          deployment={selectedDeployment}
+          action={selectedAction}
+          onClose={() => setShowActionModal(false)}
+          onConfirm={executeAction}
+          loading={loading}
+        />
+      )}
     </div>
   )
 }
