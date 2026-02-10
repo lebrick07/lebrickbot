@@ -6,6 +6,7 @@ import PendingApprovals from './components/PendingApprovals'
 import IntegrationsDashboard from './components/IntegrationsDashboard'
 import K8sInsights from './components/K8sInsights'
 import PipelinesView from './components/PipelinesView'
+import PipelineConfig from './components/PipelineConfig'
 
 function App() {
   const [activeView, setActiveView] = useState('dashboard')
@@ -23,6 +24,8 @@ function App() {
         return <K8sInsights />
       case 'pipelines':
         return <PipelinesView />
+      case 'pipeline-config':
+        return <PipelineConfig />
       case 'approvals':
         return (
           <div className="view-container">

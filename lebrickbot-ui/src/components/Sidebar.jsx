@@ -24,6 +24,12 @@ function Sidebar({ activeView, onViewChange }) {
       description: 'GitHub Actions & workflow runs'
     },
     {
+      id: 'pipeline-config',
+      icon: '⚙️',
+      label: 'Pipeline Config',
+      description: 'Customize tests & scans'
+    },
+    {
       id: 'approvals',
       icon: '✅',
       label: 'Production Approvals',
@@ -43,7 +49,7 @@ function Sidebar({ activeView, onViewChange }) {
     },
     {
       id: 'settings',
-      icon: '⚙️',
+      icon: '🔧',
       label: 'Settings',
       description: 'Configuration & preferences'
     }

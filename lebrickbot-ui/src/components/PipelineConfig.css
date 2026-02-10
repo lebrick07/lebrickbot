@@ -1,0 +1,281 @@
+.pipeline-config {
+  padding: 1.5rem;
+  background: #f6f8fa;
+  min-height: 100vh;
+}
+
+.config-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.config-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #24292f;
+  margin: 0 0 0.25rem 0;
+}
+
+.config-header p {
+  font-size: 0.875rem;
+  color: #57606a;
+  margin: 0;
+}
+
+.config-body {
+  max-width: 1200px;
+}
+
+.customer-selector {
+  background: white;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.customer-selector label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #24292f;
+}
+
+.customer-selector select {
+  flex: 1;
+  max-width: 400px;
+  padding: 5px 12px;
+  font-size: 0.875rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: white;
+}
+
+.config-loading {
+  text-align: center;
+  padding: 2rem;
+  color: #57606a;
+  font-size: 0.875rem;
+}
+
+.config-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.config-section {
+  background: white;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.config-section h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #24292f;
+  margin: 0 0 0.75rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trigger-config {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.trigger-config label {
+  font-size: 0.8125rem;
+  color: #24292f;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.input-sm {
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+}
+
+.job-card {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+
+.job-header {
+  padding: 0.75rem 1rem;
+  background: white;
+  border-bottom: 1px solid #d0d7de;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.job-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.job-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.job-steps-count {
+  font-size: 0.75rem;
+  color: #57606a;
+  background: #f6f8fa;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.job-steps {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.step-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 140px 24px;
+  gap: 0.5rem;
+  align-items: center;
+  background: white;
+  padding: 0.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.step-name,
+.step-command {
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.step-command {
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+}
+
+.step-continue {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #57606a;
+  cursor: pointer;
+}
+
+.step-continue input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.btn-delete-step {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #f6f8fa;
+  color: #57606a;
+  font-size: 1.25rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-delete-step:hover {
+  background: #ffebe9;
+  color: #cf222e;
+}
+
+.btn-add-step {
+  padding: 5px 12px;
+  font-size: 0.8125rem;
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  color: #24292f;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add-step:hover {
+  background: #ddf4ff;
+  border-color: #0969da;
+}
+
+.config-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.btn-save,
+.btn-reset {
+  padding: 6px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-save {
+  background: #1f883d;
+  color: white;
+  border: 1px solid #1f883d;
+}
+
+.btn-save:hover {
+  background: #1a7f37;
+}
+
+.btn-save:disabled {
+  background: #94d3a2;
+  border-color: #94d3a2;
+  cursor: not-allowed;
+}
+
+.btn-reset {
+  background: white;
+  color: #24292f;
+  border: 1px solid #d0d7de;
+}
+
+.btn-reset:hover {
+  background: #f6f8fa;
+}
+
+/* Compact styling */
+input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+
+input[type="text"],
+select {
+  outline: none;
+}
+
+input[type="text"]:focus,
+select:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
