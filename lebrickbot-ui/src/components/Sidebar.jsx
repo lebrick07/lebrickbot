@@ -54,8 +54,8 @@ function Sidebar({ activeView, onViewChange }) {
       <div className="sidebar-header">
         {!collapsed && (
           <>
-            <h1 className="sidebar-title">⚔️ LeBrickBot</h1>
-            <p className="sidebar-subtitle">DevOps Automation</p>
+            <h1 className="sidebar-title">🏴‍☠️ Luffy</h1>
+            <p className="sidebar-subtitle">Straw Hat Crew</p>
           </>
         )}
         <button 
