@@ -10,12 +10,12 @@
   align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #e1e4e8;
+  border-bottom: 1px solid #444c56;
 }
 
 .pipeline-info h4 {
   margin: 0 0 0.5rem 0;
-  color: #24292e;
+  color: #f0f6fc;
   font-size: 1.1rem;
 }
 
@@ -32,7 +32,7 @@
 }
 
 .pipeline-repo a {
-  color: #0366d6;
+  color: #539bf5;
   text-decoration: none;
 }
 
@@ -47,11 +47,11 @@
 
 .pipeline-stats .stat {
   font-size: 0.85rem;
-  color: #586069;
+  color: #7d8590;
 }
 
 .pipeline-stats .stat strong {
-  color: #24292e;
+  color: #f0f6fc;
   font-weight: 600;
 }
 
@@ -64,20 +64,20 @@
 .no-runs {
   text-align: center;
   padding: 2rem;
-  color: #586069;
+  color: #7d8590;
   font-size: 0.9rem;
 }
 
 .pipeline-run {
-  background: #f6f8fa;
-  border: 1px solid #e1e4e8;
+  background: #0d1117;
+  border: 1px solid #444c56;
   border-radius: 6px;
   overflow: hidden;
   transition: all 0.2s;
 }
 
 .pipeline-run:hover {
-  border-color: #0366d6;
+  border-color: #539bf5;
   box-shadow: 0 2px 8px rgba(3, 102, 214, 0.1);
 }
 
@@ -86,13 +86,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: white;
+  background: #161b22;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .run-header:hover {
-  background: #f6f8fa;
+  background: #0d1117;
 }
 
 .run-status {
@@ -125,7 +125,7 @@
 
 .status-cancelled .status-icon {
   background: #f3f4f6;
-  color: #6b7280;
+  color: #7d8590;
 }
 
 .status-running .status-icon {
@@ -135,7 +135,7 @@
 }
 
 .status-queued .status-icon {
-  background: #e5e7eb;
+  background: #21262d;
   color: #9ca3af;
 }
 
@@ -152,7 +152,7 @@
 
 .run-name {
   font-weight: 600;
-  color: #24292e;
+  color: #f0f6fc;
   font-size: 0.95rem;
 }
 
@@ -161,14 +161,14 @@
   align-items: center;
   gap: 0.75rem;
   font-size: 0.8rem;
-  color: #586069;
+  color: #7d8590;
 }
 
 .run-branch {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: #f6f8fa;
+  background: #0d1117;
   padding: 0.15rem 0.5rem;
   border-radius: 3px;
   font-family: 'Courier New', monospace;
@@ -180,7 +180,7 @@
 
 .run-commit {
   font-family: 'Courier New', monospace;
-  background: #f6f8fa;
+  background: #0d1117;
   padding: 0.15rem 0.5rem;
   border-radius: 3px;
 }
@@ -193,17 +193,17 @@
 
 .run-duration {
   font-size: 0.85rem;
-  color: #586069;
+  color: #7d8590;
   font-weight: 500;
 }
 
 .run-link {
-  color: #0366d6;
+  color: #539bf5;
   text-decoration: none;
   font-size: 0.85rem;
   font-weight: 500;
   padding: 0.25rem 0.75rem;
-  border: 1px solid #e1e4e8;
+  border: 1px solid #444c56;
   border-radius: 4px;
   transition: all 0.2s;
 }
@@ -211,28 +211,28 @@
 .run-link:hover {
   background: #0366d6;
   color: white;
-  border-color: #0366d6;
+  border-color: #539bf5;
 }
 
 .run-commit-msg {
   padding: 0.5rem 1rem;
   font-size: 0.85rem;
-  color: #586069;
-  background: #f6f8fa;
-  border-top: 1px solid #e1e4e8;
+  color: #7d8590;
+  background: #0d1117;
+  border-top: 1px solid #444c56;
   font-style: italic;
 }
 
 .run-jobs {
   padding: 1rem;
-  background: white;
-  border-top: 1px solid #e1e4e8;
+  background: #161b22;
+  border-top: 1px solid #444c56;
 }
 
 .jobs-loading {
   text-align: center;
   padding: 1rem;
-  color: #586069;
+  color: #7d8590;
   font-size: 0.9rem;
 }
 
@@ -243,8 +243,8 @@
 }
 
 .job-item {
-  background: #f6f8fa;
-  border: 1px solid #e1e4e8;
+  background: #0d1117;
+  border: 1px solid #444c56;
   border-radius: 4px;
   overflow: hidden;
 }
@@ -254,19 +254,19 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: white;
-  border-bottom: 1px solid #e1e4e8;
+  background: #161b22;
+  border-bottom: 1px solid #444c56;
 }
 
 .job-name {
   flex: 1;
   font-weight: 500;
   font-size: 0.9rem;
-  color: #24292e;
+  color: #f0f6fc;
 }
 
 .job-link {
-  color: #0366d6;
+  color: #539bf5;
   text-decoration: none;
   font-weight: bold;
   font-size: 1.2rem;
@@ -289,19 +289,19 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.35rem 0.5rem;
-  background: white;
+  background: #161b22;
   border-radius: 3px;
   font-size: 0.85rem;
   transition: all 0.2s;
 }
 
 .step-item:hover {
-  background: #f6f8fa;
+  background: #0d1117;
 }
 
 .step-number {
   font-weight: 600;
-  color: #586069;
+  color: #7d8590;
   min-width: 1.5rem;
   text-align: right;
 }
@@ -328,14 +328,14 @@
 
 .step-name {
   flex: 1;
-  color: #24292e;
+  color: #f0f6fc;
 }
 
 .pipeline-loading,
 .pipeline-error {
   text-align: center;
   padding: 2rem;
-  color: #586069;
+  color: #7d8590;
 }
 
 .pipeline-error {
@@ -346,7 +346,7 @@
 }
 
 .link-github-actions {
-  color: #0366d6;
+  color: #539bf5;
   text-decoration: none;
   font-weight: 500;
   padding: 0.5rem 1rem;

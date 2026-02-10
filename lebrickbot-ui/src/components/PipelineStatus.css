@@ -1,6 +1,6 @@
 .pipeline-status {
-  background: #f6f8fa;
-  border: 1px solid #e1e4e8;
+  background: #161b22;
+  border: 1px solid #444c56;
   border-radius: 6px;
   padding: 0.75rem;
   margin-top: 0.75rem;
@@ -16,27 +16,27 @@
 .pipeline-label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #586069;
+  color: #7d8590;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .pipeline-link-mini {
   font-size: 0.75rem;
-  color: #0366d6;
+  color: #539bf5;
   text-decoration: none;
   font-family: 'Courier New', monospace;
   padding: 0.15rem 0.5rem;
-  background: white;
+  background: #0d1117;
   border-radius: 3px;
-  border: 1px solid #e1e4e8;
+  border: 1px solid #444c56;
   transition: all 0.2s;
 }
 
 .pipeline-link-mini:hover {
   background: #0366d6;
   color: white;
-  border-color: #0366d6;
+  border-color: #539bf5;
 }
 
 .pipeline-stages {
@@ -53,7 +53,7 @@
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem;
-  background: white;
+  background: #0d1117;
   border: 2px solid #e1e4e8;
   border-radius: 6px;
   transition: all 0.3s;
@@ -74,7 +74,7 @@
 .stage-name {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #24292e;
+  color: #f0f6fc;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -82,11 +82,11 @@
 /* Stage states */
 .stage-idle {
   border-color: #e1e4e8;
-  background: white;
+  background: #0d1117;
 }
 
 .stage-idle .stage-icon {
-  background: #f6f8fa;
+  background: #161b22;
   color: #9ca3af;
 }
 

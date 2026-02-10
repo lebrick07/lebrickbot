@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import './App.css'
-import { CustomerProvider } from './contexts/CustomerContext'
-import TopNavbar from './components/TopNavbar'
+import OperatorNavbar from './components/OperatorNavbar'
 import Sidebar from './components/Sidebar'
 import ApplicationsTable from './components/ApplicationsTable'
 import PendingApprovals from './components/PendingApprovals'
@@ -9,20 +8,17 @@ import IntegrationsDashboard from './components/IntegrationsDashboard'
 import K8sInsights from './components/K8sInsights'
 import PipelinesView from './components/PipelinesView'
 import PipelineConfig from './components/PipelineConfig'
-import CreateCustomerModal from './components/CreateCustomerModal'
 
 function App() {
   const [activeView, setActiveView] = useState('applications')
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [selectedEnvironment, setSelectedEnvironment] = useState('all')
-  const [showCreateCustomer, setShowCreateCustomer] = useState(false)
+  const [showCreateWizard, setShowCreateWizard] = useState(null)
 
-  const handleCreateNew = () => {
-    setShowCreateCustomer(true)
-  }
-
-  const handleCustomerCreated = (customer) => {
-    // Refresh will happen via context
-    setShowCreateCustomer(false)
+  const handleCreateNew = (type) => {
+    setShowCreateWizard(type)
+    // TODO: Open customer creation wizard modal
+    alert(`Create New ${type.charAt(0).toUpperCase() + type.slice(1)} - Wizard coming soon`)
   }
 
   const renderView = () => {
@@ -30,11 +26,12 @@ function App() {
       case 'applications':
         return (
           <ApplicationsTable 
+            selectedCustomer={selectedCustomer}
             selectedEnvironment={selectedEnvironment}
           />
         )
       case 'k8s':
-        return <K8sInsights />
+        return <K8sInsights selectedCustomer={selectedCustomer} />
       case 'pipelines':
         return <PipelinesView />
       case 'pipeline-config':
@@ -80,6 +77,7 @@ function App() {
       default:
         return (
           <ApplicationsTable 
+            selectedCustomer={selectedCustomer}
             selectedEnvironment={selectedEnvironment}
           />
         )
@@ -87,26 +85,23 @@ function App() {
   }
 
   return (
-    <CustomerProvider>
-      <div className="app operator-grade">
-        <TopNavbar onCreateNew={handleCreateNew} />
-        <div className="app-body">
-          <Sidebar activeView={activeView} onViewChange={setActiveView} />
-          <main className="app-main">
-            <div className="app-content">
-              {renderView()}
-            </div>
-          </main>
-        </div>
-
-        {showCreateCustomer && (
-          <CreateCustomerModal
-            onClose={() => setShowCreateCustomer(false)}
-            onCustomerCreated={handleCustomerCreated}
-          />
-        )}
+    <div className="app operator-grade">
+      <OperatorNavbar 
+        selectedCustomer={selectedCustomer}
+        onCustomerChange={setSelectedCustomer}
+        selectedEnvironment={selectedEnvironment}
+        onEnvironmentChange={setSelectedEnvironment}
+        onCreateNew={handleCreateNew}
+      />
+      <div className="app-body">
+        <Sidebar activeView={activeView} onViewChange={setActiveView} />
+        <main className="app-main">
+          <div className="app-content">
+            {renderView()}
+          </div>
+        </main>
       </div>
-    </CustomerProvider>
+    </div>
   )
 }
 

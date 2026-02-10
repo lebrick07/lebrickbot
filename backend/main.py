@@ -927,3 +927,53 @@ async def get_all_pipelines_status():
             'pipelines': [],
             'error': str(e)
         }
+
+# Customer Creation Endpoint
+class CustomerCreate(BaseModel):
+    name: str
+    icon: str = "🏢"
+    deploymentModel: str
+    runtime: str
+    cicdStyle: str
+    environments: List[str]
+    approvalStrategy: str
+    observability: List[str]
+
+@app.post("/api/customers/create")
+async def create_customer(customer_data: CustomerCreate):
+    """
+    AI-powered customer creation
+    Generates:
+    - GitHub repository with templates
+    - Multi-environment CI/CD pipeline
+    - Kubernetes namespaces and manifests
+    - ArgoCD applications
+    - Ingresses with DNS
+    """
+    customer_id = customer_data.name.lower().replace(' ', '-').replace('.', '-')
+    
+    # TODO: Implement actual AI-powered generation
+    # For now, return a simulated response
+    return {
+        "success": True,
+        "customer": {
+            "id": customer_id,
+            "name": customer_data.name,
+            "icon": customer_data.icon,
+            "stack": customer_data.runtime,
+            "deploymentModel": customer_data.deploymentModel,
+            "environments": [
+                {"environment": env, "status": "provisioning", "pods": {"running": 0, "total": 0}, "url": f"http://{customer_id}-{env}.local"}
+                for env in customer_data.environments
+            ],
+            "overallStatus": "provisioning"
+        },
+        "message": f"Customer {customer_data.name} is being created. This will take 2-3 minutes.",
+        "steps": [
+            {"step": "create_github_repo", "status": "in_progress"},
+            {"step": "generate_pipeline", "status": "pending"},
+            {"step": "create_k8s_namespaces", "status": "pending"},
+            {"step": "deploy_argocd_apps", "status": "pending"},
+            {"step": "setup_ingress", "status": "pending"}
+        ]
+    }

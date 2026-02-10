@@ -1,34 +1,26 @@
 import { useState, useEffect } from 'react'
+import { useCustomer } from '../contexts/CustomerContext'
 import './PipelineConfig.css'
 
 function PipelineConfig() {
-  const [customers, setCustomers] = useState([])
-  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const { activeCustomer, customers } = useCustomer()
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetchCustomers()
-  }, [])
-
-  const fetchCustomers = async () => {
-    try {
-      const response = await fetch('/api/customers')
-      const data = await response.json()
-      setCustomers(data.customers || [])
-    } catch (error) {
-      console.error('Error fetching customers:', error)
+    if (activeCustomer) {
+      loadCustomerConfig()
+    } else {
+      setConfig(null)
     }
-  }
+  }, [activeCustomer])
 
-  const loadCustomerConfig = async (customerId) => {
+  const loadCustomerConfig = async () => {
     setLoading(true)
-    setSelectedCustomer(customerId)
     
-    // For now, load a template based on stack
-    const customer = customers.find(c => c.id === customerId)
-    const template = getDefaultConfig(customer.stack)
+    // Load template based on customer stack
+    const template = getDefaultConfig(activeCustomer.stack)
     setConfig(template)
     setLoading(false)
   }
@@ -200,27 +192,20 @@ function PipelineConfig() {
       <div className="config-header">
         <div>
           <h1>⚙️ Pipeline Configuration</h1>
-          <p>Customize CI/CD workflows for each customer</p>
+          <p>Customize CI/CD workflows for {activeCustomer ? activeCustomer.name : 'your customers'}</p>
         </div>
       </div>
 
       <div className="config-body">
-        <div className="customer-selector">
-          <label>Select Customer:</label>
-          <select
-            value={selectedCustomer || ''}
-            onChange={(e) => loadCustomerConfig(e.target.value)}
-          >
-            <option value="">-- Choose a customer --</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.stack})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {loading && <div className="config-loading">Loading configuration...</div>}
+        {!activeCustomer ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">🎯</div>
+            <h3>No Customer Selected</h3>
+            <p>Select a customer from the top navigation to configure their pipeline</p>
+          </div>
+        ) : loading ? (
+          <div className="config-loading">Loading configuration...</div>
+        ) : null}
 
         {config && !loading && (
           <div className="config-editor">

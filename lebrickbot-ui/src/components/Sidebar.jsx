@@ -6,10 +6,10 @@ function Sidebar({ activeView, onViewChange }) {
 
   const menuItems = [
     {
-      id: 'dashboard',
-      icon: '📊',
-      label: 'Dashboard',
-      description: 'Customer overview & deployments'
+      id: 'applications',
+      icon: '📦',
+      label: 'Applications',
+      description: 'All deployments & environments'
     },
     {
       id: 'k8s',

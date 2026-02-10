@@ -10,18 +10,29 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #0d1117;
+  color: #f0f6fc;
 }
 
 .app {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
-  background: #f9fafb;
+  background: #0d1117;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  padding-top: 60px; /* Height of TopNavbar */
 }
 
 .app-main {
   flex: 1;
   margin-left: 280px;
   transition: margin-left 0.3s ease;
+  background: #0d1117;
+  min-height: calc(100vh - 60px);
 }
 
 .app-content {
@@ -29,30 +40,30 @@ body {
 }
 
 /* When sidebar is collapsed */
-body:has(.sidebar.collapsed) .app-main {
+.app:has(.sidebar.collapsed) .app-main {
   margin-left: 70px;
 }
 
 .view-container {
-  padding: 2rem;
-  background: #f9fafb;
-  min-height: 100vh;
+  padding: 1.5rem;
+  background: #0d1117;
+  min-height: calc(100vh - 60px);
 }
 
 .view-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .view-header h1 {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #f0f6fc;
   margin: 0 0 0.5rem 0;
 }
 
 .view-subtitle {
-  color: #6b7280;
-  font-size: 0.95rem;
+  color: #7d8590;
+  font-size: 0.875rem;
   margin: 0;
 }
 
@@ -66,29 +77,30 @@ body:has(.sidebar.collapsed) .app-main {
 }
 
 .coming-soon p {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  color: #6b7280;
+  color: #7d8590;
   margin-bottom: 0.5rem;
 }
 
 .coming-soon-detail {
-  font-size: 1rem !important;
+  font-size: 0.875rem !important;
   font-weight: 400 !important;
-  color: #9ca3af !important;
+  color: #57606a !important;
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .app {
+  .app-body {
     flex-direction: column;
+    padding-top: 60px;
   }
 
   .app-main {
     margin-left: 0;
   }
 
-  body:has(.sidebar.collapsed) .app-main {
+  .app:has(.sidebar.collapsed) .app-main {
     margin-left: 0;
   }
 
@@ -97,6 +109,6 @@ body:has(.sidebar.collapsed) .app-main {
   }
 
   .view-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
 }
