@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import './PendingApprovals.css'
 import DeploymentProgress from './DeploymentProgress'
 
-function PendingApprovals() {
+function PendingApprovals({ selectedCustomer }) {
   const [approvals, setApprovals] = useState([])
   const [loading, setLoading] = useState(true)
   const [promoting, setPromoting] = useState(null)
@@ -68,7 +68,11 @@ function PendingApprovals() {
     )
   }
 
-  if (approvals.length === 0) {
+  const filteredApprovals = selectedCustomer
+    ? approvals.filter(a => a.customer_id === selectedCustomer)
+    : approvals
+
+  if (filteredApprovals.length === 0) {
     return (
       <div className="pending-approvals no-approvals">
         <h3>🔔 Pending Approvals</h3>
@@ -84,11 +88,11 @@ function PendingApprovals() {
     <div className="pending-approvals has-approvals">
       <div className="approvals-header">
         <h3>🔔 Pending Approvals</h3>
-        <span className="approval-count">{approvals.length}</span>
+        <span className="approval-count">{filteredApprovals.length}</span>
       </div>
       
       <div className="approvals-list">
-        {approvals.map(approval => (
+        {filteredApprovals.map(approval => (
           <div key={approval.customer_id} className="approval-card">
             <div className="approval-header">
               <div>

@@ -24,6 +24,10 @@ body {
   transition: margin-left 0.3s ease;
 }
 
+.app-content {
+  padding: 1rem;
+}
+
 /* When sidebar is collapsed */
 body:has(.sidebar.collapsed) .app-main {
   margin-left: 70px;

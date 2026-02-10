@@ -3,7 +3,7 @@ import './CustomerDeploymentsView.css'
 import DeploymentDetails from './DeploymentDetails'
 import PipelineStatus from './PipelineStatus'
 
-function CustomerDeploymentsView() {
+function CustomerDeploymentsView({ selectedCustomer }) {
   const [customers, setCustomers] = useState([])
   const [deployments, setDeployments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -54,17 +54,21 @@ function CustomerDeploymentsView() {
     return <div className="customer-deployments-loading">Loading deployments...</div>
   }
 
+  const filteredCustomers = selectedCustomer 
+    ? customers.filter(c => c.id === selectedCustomer)
+    : customers
+
   return (
     <div className="customer-deployments-view">
       <div className="view-header">
         <h2>Customer Deployments</h2>
         <p className="view-subtitle">
-          {customers.length} customers · {deployments.length} total deployments
+          {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} · {deployments.filter(d => !selectedCustomer || d.customer === selectedCustomer).length} deployment{deployments.filter(d => !selectedCustomer || d.customer === selectedCustomer).length !== 1 ? 's' : ''}
         </p>
       </div>
 
       <div className="customers-grid">
-        {customers.map(customer => {
+        {filteredCustomers.map(customer => {
           const devDeploys = getDeploymentsByCustomerAndEnv(customer.id, 'dev')
           const preprodDeploys = getDeploymentsByCustomerAndEnv(customer.id, 'preprod')
           const prodDeploys = getDeploymentsByCustomerAndEnv(customer.id, 'prod')

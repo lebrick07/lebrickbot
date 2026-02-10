@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './App.css'
 import Sidebar from './components/Sidebar'
+import CustomerSelector from './components/CustomerSelector'
 import CustomerDeploymentsView from './components/CustomerDeploymentsView'
 import PendingApprovals from './components/PendingApprovals'
 import IntegrationsDashboard from './components/IntegrationsDashboard'
@@ -10,18 +11,19 @@ import PipelineConfig from './components/PipelineConfig'
 
 function App() {
   const [activeView, setActiveView] = useState('dashboard')
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
 
   const renderView = () => {
     switch (activeView) {
       case 'dashboard':
         return (
           <>
-            <PendingApprovals />
-            <CustomerDeploymentsView />
+            <PendingApprovals selectedCustomer={selectedCustomer} />
+            <CustomerDeploymentsView selectedCustomer={selectedCustomer} />
           </>
         )
       case 'k8s':
-        return <K8sInsights />
+        return <K8sInsights selectedCustomer={selectedCustomer} />
       case 'pipelines':
         return <PipelinesView />
       case 'pipeline-config':
@@ -73,7 +75,13 @@ function App() {
     <div className="app">
       <Sidebar activeView={activeView} onViewChange={setActiveView} />
       <main className="app-main">
-        {renderView()}
+        <div className="app-content">
+          <CustomerSelector 
+            selectedCustomer={selectedCustomer}
+            onCustomerChange={setSelectedCustomer}
+          />
+          {renderView()}
+        </div>
       </main>
     </div>
   )
