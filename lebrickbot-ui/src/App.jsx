@@ -10,19 +10,20 @@ import K8sInsights from './components/K8sInsights'
 import PipelinesView from './components/PipelinesView'
 import PipelineConfig from './components/PipelineConfig'
 import CreateCustomerModal from './components/CreateCustomerModal'
+import AIChatPanel from './components/AIChatPanel'
 
 function App() {
   const [activeView, setActiveView] = useState('applications')
   const [selectedEnvironment, setSelectedEnvironment] = useState('all')
-  const [showCreateCustomer, setShowCreateCustomer] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(null) // null | 'customer' | 'application' | 'pipeline' | 'integration'
+  const [aiChatOpen, setAIChatOpen] = useState(false)
 
-  const handleCreateNew = () => {
-    setShowCreateCustomer(true)
+  const handleCreateNew = (type) => {
+    setShowCreateModal(type)
   }
 
-  const handleCustomerCreated = (customer) => {
-    // Refresh will happen via context
-    setShowCreateCustomer(false)
+  const handleCreated = () => {
+    setShowCreateModal(null)
   }
 
   const renderView = () => {
@@ -89,7 +90,11 @@ function App() {
   return (
     <CustomerProvider>
       <div className="app operator-grade">
-        <TopNavbar onCreateNew={handleCreateNew} />
+        <TopNavbar 
+          onCreateNew={handleCreateNew}
+          selectedEnvironment={selectedEnvironment}
+          onEnvironmentChange={setSelectedEnvironment}
+        />
         <div className="app-body">
           <Sidebar activeView={activeView} onViewChange={setActiveView} />
           <main className="app-main">
@@ -99,12 +104,61 @@ function App() {
           </main>
         </div>
 
-        {showCreateCustomer && (
+        {/* Create Modals */}
+        {showCreateModal === 'customer' && (
           <CreateCustomerModal
-            onClose={() => setShowCreateCustomer(false)}
-            onCustomerCreated={handleCustomerCreated}
+            onClose={() => setShowCreateModal(null)}
+            onCustomerCreated={handleCreated}
           />
         )}
+
+        {showCreateModal === 'application' && (
+          <div className="modal-overlay" onClick={() => setShowCreateModal(null)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>📦 Create New Application</h2>
+                <button className="modal-close" onClick={() => setShowCreateModal(null)}>×</button>
+              </div>
+              <div className="modal-body">
+                <p>Application creation wizard coming soon...</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCreateModal === 'pipeline' && (
+          <div className="modal-overlay" onClick={() => setShowCreateModal(null)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>🚀 Create New Pipeline</h2>
+                <button className="modal-close" onClick={() => setShowCreateModal(null)}>×</button>
+              </div>
+              <div className="modal-body">
+                <p>Pipeline creation wizard coming soon...</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCreateModal === 'integration' && (
+          <div className="modal-overlay" onClick={() => setShowCreateModal(null)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>🔌 Create New Integration</h2>
+                <button className="modal-close" onClick={() => setShowCreateModal(null)}>×</button>
+              </div>
+              <div className="modal-body">
+                <p>Integration creation wizard coming soon...</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI Chat Panel - Always Available */}
+        <AIChatPanel 
+          isOpen={aiChatOpen}
+          onToggle={() => setAIChatOpen(!aiChatOpen)}
+        />
       </div>
     </CustomerProvider>
   )

@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { useCustomer } from '../contexts/CustomerContext'
 import './TopNavbar.css'
 
-function TopNavbar({ onCreateNew }) {
+function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange }) {
   const { customers, selectedCustomer, selectCustomer } = useCustomer()
   const [systemStatus, setSystemStatus] = useState({ healthy: true, loading: true })
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showCreateMenu, setShowCreateMenu] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     // Check system health
@@ -34,7 +36,8 @@ function TopNavbar({ onCreateNew }) {
 
   return (
     <nav className="top-navbar">
-      <div className="navbar-section navbar-left">
+      {/* Left Section: Brand + Filters */}
+      <div className="navbar-left">
         <div className="navbar-brand">
           <span className="brand-icon">🏴‍☠️</span>
           <div className="brand-text">
@@ -42,37 +45,44 @@ function TopNavbar({ onCreateNew }) {
             <span className="brand-subtitle">Straw Hat DevOps</span>
           </div>
         </div>
-        
-        {/* CUSTOMER TABS - SINGLE SOURCE OF TRUTH */}
-        <div className="customer-tabs">
-          <button
-            className={`customer-tab ${!selectedCustomer ? 'active' : ''}`}
-            onClick={() => selectCustomer(null)}
+
+        <div className="navbar-filters">
+          <select 
+            className="filter-select"
+            value={selectedCustomer || 'all'}
+            onChange={(e) => selectCustomer(e.target.value === 'all' ? null : e.target.value)}
           >
-            <span className="tab-icon">🏠</span>
-            <span className="tab-label">All Customers</span>
-          </button>
-          {customers.map(customer => (
-            <button
-              key={customer.id}
-              className={`customer-tab ${selectedCustomer === customer.id ? 'active' : ''}`}
-              onClick={() => selectCustomer(customer.id)}
-            >
-              <span className="tab-icon">{customer.icon || '🏢'}</span>
-              <span className="tab-label">{customer.name}</span>
-              <span className="tab-stack">{customer.stack}</span>
-            </button>
-          ))}
-          
-          {/* CREATE NEW CUSTOMER BUTTON */}
-          <button className="customer-tab create-tab" onClick={onCreateNew}>
-            <span className="tab-icon">+</span>
-            <span className="tab-label">Create Customer</span>
-          </button>
+            <option value="all">All Customers</option>
+            {customers.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
+          <select
+            className="filter-select"
+            value={selectedEnvironment || 'all'}
+            onChange={(e) => onEnvironmentChange(e.target.value)}
+          >
+            <option value="all">All Environments</option>
+            <option value="dev">DEV</option>
+            <option value="preprod">PREPROD</option>
+            <option value="prod">PROD</option>
+          </select>
+        </div>
+
+        <div className="navbar-search-container">
+          <input 
+            type="text"
+            placeholder="Search customers, apps, pipelines..."
+            className="navbar-search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
       </div>
 
-      <div className="navbar-section navbar-right">
+      {/* Right Section: Status + Actions */}
+      <div className="navbar-right">
         {/* System Status */}
         <div className={`status-indicator ${systemStatus.healthy ? 'healthy' : 'unhealthy'}`}>
           <span className="status-dot"></span>
@@ -84,7 +94,7 @@ function TopNavbar({ onCreateNew }) {
         {/* Notifications */}
         <div className="navbar-notifications">
           <button 
-            className="notification-btn"
+            className="icon-btn"
             onClick={() => setShowNotifications(!showNotifications)}
             title="Notifications"
           >
@@ -97,29 +107,27 @@ function TopNavbar({ onCreateNew }) {
           {showNotifications && (
             <div className="notification-dropdown">
               <div className="notification-header">
-                <h3>Notifications</h3>
+                <span>Notifications</span>
                 {notificationCount > 0 && (
-                  <span className="notification-count">{notificationCount} pending</span>
+                  <span className="count">{notificationCount} pending</span>
                 )}
               </div>
               <div className="notification-list">
                 {notificationCount === 0 ? (
                   <div className="notification-empty">
-                    <span>✅</span>
-                    <p>All caught up!</p>
+                    All caught up
                   </div>
                 ) : (
                   notifications.map((approval, idx) => (
                     <div key={idx} className="notification-item">
-                      <div className="notification-icon">🚀</div>
+                      <span className="notification-icon">🚀</span>
                       <div className="notification-content">
-                        <p className="notification-title">
+                        <div className="notification-title">
                           Production Approval Required
-                        </p>
-                        <p className="notification-detail">
+                        </div>
+                        <div className="notification-detail">
                           {approval.customer} - {approval.deployment}
-                        </p>
-                        <span className="notification-time">Waiting for approval</span>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -129,27 +137,80 @@ function TopNavbar({ onCreateNew }) {
           )}
         </div>
 
-        {/* Quick Actions */}
-        <div className="navbar-actions">
-          <a 
-            href="http://argocd.local" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="action-btn"
-            title="ArgoCD"
+        {/* Create Menu */}
+        <div className="create-menu-container">
+          <button 
+            className="create-btn"
+            onClick={() => setShowCreateMenu(!showCreateMenu)}
           >
-            <span>🐙</span>
-          </a>
-          <a 
-            href="https://github.com/lebrick07/lebrickbot" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="action-btn"
-            title="GitHub Repository"
-          >
-            <span>📦</span>
-          </a>
+            + Create
+          </button>
+
+          {showCreateMenu && (
+            <div className="create-menu">
+              <button 
+                className="create-menu-item"
+                onClick={() => {
+                  setShowCreateMenu(false)
+                  onCreateNew('customer')
+                }}
+              >
+                <span className="menu-icon">🏢</span>
+                New Customer
+              </button>
+              <button 
+                className="create-menu-item"
+                onClick={() => {
+                  setShowCreateMenu(false)
+                  onCreateNew('application')
+                }}
+              >
+                <span className="menu-icon">📦</span>
+                New Application
+              </button>
+              <button 
+                className="create-menu-item"
+                onClick={() => {
+                  setShowCreateMenu(false)
+                  onCreateNew('pipeline')
+                }}
+              >
+                <span className="menu-icon">🚀</span>
+                New Pipeline
+              </button>
+              <button 
+                className="create-menu-item"
+                onClick={() => {
+                  setShowCreateMenu(false)
+                  onCreateNew('integration')
+                }}
+              >
+                <span className="menu-icon">🔌</span>
+                New Integration
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Quick Links */}
+        <a 
+          href="http://argocd.local" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="icon-btn"
+          title="ArgoCD"
+        >
+          🐙
+        </a>
+        <a 
+          href="https://github.com/lebrick07/lebrickbot" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="icon-btn"
+          title="GitHub"
+        >
+          📦
+        </a>
 
         {/* User Profile */}
         <div className="navbar-user">
