@@ -1,6 +1,7 @@
 /* Sidebar - Compact Operator Console */
 .sidebar {
   width: 220px;
+  flex-shrink: 0;
   background: #0d1117;
   border-right: 1px solid #21262d;
   display: flex;
