@@ -185,26 +185,6 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
           )}
         </div>
 
-        {/* Quick Links */}
-        <a 
-          href="http://argocd.local" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="icon-btn"
-          title="ArgoCD"
-        >
-          🐙
-        </a>
-        <a 
-          href="https://github.com/lebrick07/lebrickbot" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="icon-btn"
-          title="GitHub"
-        >
-          📦
-        </a>
-
         {/* User Profile with Login/Logout */}
         <div className="navbar-user-container">
           <div 

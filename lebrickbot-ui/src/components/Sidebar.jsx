@@ -91,30 +91,6 @@ function Sidebar({ activeView, onViewChange, isOpen = false }) {
         ))}
       </nav>
 
-      <div className="sidebar-footer">
-        {!collapsed && (
-          <>
-            <div className="footer-link">
-              <a 
-                href="http://argocd.local" 
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                🐙 ArgoCD
-              </a>
-            </div>
-            <div className="footer-link">
-              <a 
-                href="https://github.com/lebrick07/lebrickbot" 
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                📦 GitHub
-              </a>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   )
 }
