@@ -44,6 +44,48 @@ const availableIntegrations = [
     ]
   },
   {
+    id: 'ghcr',
+    name: 'GitHub Container Registry',
+    icon: '📦',
+    description: 'GitHub Container Registry (ghcr.io) for Docker images',
+    configFields: [
+      { name: 'username', label: 'GitHub Username', type: 'text', required: true },
+      { name: 'token', label: 'Personal Access Token', type: 'password', required: true }
+    ]
+  },
+  {
+    id: 'dockerhub',
+    name: 'Docker Hub',
+    icon: '🐋',
+    description: 'Docker Hub registry for container images',
+    configFields: [
+      { name: 'username', label: 'Docker Hub Username', type: 'text', required: true },
+      { name: 'password', label: 'Password or Access Token', type: 'password', required: true }
+    ]
+  },
+  {
+    id: 'ecr',
+    name: 'Amazon ECR',
+    icon: '📦',
+    description: 'Amazon Elastic Container Registry',
+    configFields: [
+      { name: 'region', label: 'AWS Region', type: 'text', placeholder: 'us-east-1', required: true },
+      { name: 'accessKeyId', label: 'Access Key ID', type: 'text', required: true },
+      { name: 'secretAccessKey', label: 'Secret Access Key', type: 'password', required: true },
+      { name: 'registryId', label: 'Registry ID (Account ID)', type: 'text', required: true }
+    ]
+  },
+  {
+    id: 'gcr',
+    name: 'Google Container Registry',
+    icon: '📦',
+    description: 'Google Container Registry (GCR)',
+    configFields: [
+      { name: 'projectId', label: 'GCP Project ID', type: 'text', required: true },
+      { name: 'serviceAccountKey', label: 'Service Account Key (JSON)', type: 'textarea', required: true }
+    ]
+  },
+  {
     id: 'aws',
     name: 'AWS',
     icon: '☁️',
