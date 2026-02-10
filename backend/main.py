@@ -108,7 +108,7 @@ class LuffyActionRequest(BaseModel):
     action: str
     context: Optional[Dict[str, Any]] = None
 
-@app.post("/luffy/chat")
+@app.post("/api/luffy/chat")
 def luffy_chat(request: LuffyChatRequest):
     """
     Luffy AI Chat - Conversational AI DevOps Engineer
@@ -238,7 +238,7 @@ def luffy_chat(request: LuffyChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/luffy/action")
+@app.post("/api/luffy/action")
 def luffy_action(request: LuffyActionRequest):
     """
     Execute Luffy AI actions
