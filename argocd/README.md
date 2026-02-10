@@ -9,7 +9,7 @@ kubectl apply -f argocd/luffy-application.yaml
 ```
 
 This will:
-- Deploy Luffy from the Helm chart in `helm/lebrickbot/`
+- Deploy Luffy from the Helm chart in `helm/openluffy/`
 - Watch the `main` branch for changes
 - Auto-sync on git pushes (automated GitOps)
 - Self-heal if resources drift from desired state
@@ -25,8 +25,8 @@ This will:
 ## CI/CD Flow
 
 1. **Push to main** → GitHub Actions builds Docker images
-2. **Images pushed** to `ghcr.io/lebrick07/lebrickbot-{backend,frontend}`
-3. **Image tags updated** in `helm/lebrickbot/values.yaml`
+2. **Images pushed** to `ghcr.io/lebrick07/openluffy-{backend,frontend}`
+3. **Image tags updated** in `helm/openluffy/values.yaml`
 4. **ArgoCD detects change** → auto-syncs to K8s cluster
 5. **New version deployed** automatically
 

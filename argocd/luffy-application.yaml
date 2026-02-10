@@ -9,7 +9,7 @@ spec:
   project: default
   
   source:
-    repoURL: https://github.com/lebrick07/lebrickbot.git
+    repoURL: https://github.com/lebrick07/openluffy.git
     targetRevision: main
     path: helm/lebrickbot
     helm:
