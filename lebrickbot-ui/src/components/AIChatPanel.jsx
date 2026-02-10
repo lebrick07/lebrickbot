@@ -2,11 +2,20 @@ import { useState, useEffect, useRef } from 'react'
 import { useCustomer } from '../contexts/CustomerContext'
 import './AIChatPanel.css'
 
+const CLAUDE_MODELS = [
+  { id: 'claude-sonnet-4', name: 'Claude Sonnet 4', description: 'Latest, most capable' },
+  { id: 'claude-sonnet-3.5', name: 'Claude Sonnet 3.5', description: 'Fast & intelligent' },
+  { id: 'claude-opus-3', name: 'Claude Opus 3', description: 'Most powerful' },
+  { id: 'claude-haiku-3', name: 'Claude Haiku 3', description: 'Fastest, most affordable' },
+]
+
 function AIChatPanel({ isOpen }) {
   const { activeCustomer } = useCustomer()
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4')
+  const [showModelSelector, setShowModelSelector] = useState(false)
   const messagesEndRef = useRef(null)
 
   const scrollToBottom = () => {
@@ -16,6 +25,17 @@ function AIChatPanel({ isOpen }) {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showModelSelector && !event.target.closest('.model-selector')) {
+        setShowModelSelector(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showModelSelector])
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return
@@ -47,6 +67,7 @@ function AIChatPanel({ isOpen }) {
         body: JSON.stringify({
           message: inputValue,
           context: context,
+          model: selectedModel,
           history: messages.map(m => ({
             role: m.role,
             content: m.content
@@ -137,6 +158,39 @@ function AIChatPanel({ isOpen }) {
           <div>
             <h3>Luffy – Captain's Deck</h3>
             <span className="ai-context">{getContextString()}</span>
+          </div>
+        </div>
+        
+        <div className="ai-header-right">
+          <div className="model-selector">
+            <button 
+              className="model-selector-button"
+              onClick={() => setShowModelSelector(!showModelSelector)}
+            >
+              <span className="model-icon">🧠</span>
+              <span className="model-name">
+                {CLAUDE_MODELS.find(m => m.id === selectedModel)?.name || 'Select Model'}
+              </span>
+              <span className="model-chevron">{showModelSelector ? '▲' : '▼'}</span>
+            </button>
+            
+            {showModelSelector && (
+              <div className="model-selector-dropdown">
+                {CLAUDE_MODELS.map(model => (
+                  <div
+                    key={model.id}
+                    className={`model-option ${selectedModel === model.id ? 'active' : ''}`}
+                    onClick={() => {
+                      setSelectedModel(model.id)
+                      setShowModelSelector(false)
+                    }}
+                  >
+                    <div className="model-option-name">{model.name}</div>
+                    <div className="model-option-desc">{model.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
