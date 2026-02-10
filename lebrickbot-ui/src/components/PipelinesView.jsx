@@ -148,7 +148,7 @@ function PipelinesView() {
               </div>
             )}
 
-            <div className="pipeline-card-footer">
+            <div className="pipeline-footer">
               <button className="btn-view-runs">
                 View Workflow Runs →
               </button>
@@ -158,92 +158,65 @@ function PipelinesView() {
       </div>
 
       {selectedPipeline && runs && (
-        <div className="pipeline-runs-modal" onClick={() => {setSelectedPipeline(null); setRuns(null); setJobs(null);}}>
-          <div className="runs-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="runs-modal-header">
+        <div className="pipeline-modal" onClick={() => {setSelectedPipeline(null); setRuns(null); setJobs(null);}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
               <h2>Workflow Runs - {selectedPipeline.toUpperCase()}</h2>
-              <button className="modal-close" onClick={() => {setSelectedPipeline(null); setRuns(null); setJobs(null);}}>×</button>
+              <button className="btn-close" onClick={() => {setSelectedPipeline(null); setRuns(null); setJobs(null);}}>×</button>
             </div>
 
-            {loadingRuns ? (
-              <div className="modal-loading">Loading workflow runs...</div>
-            ) : (
-              <div className="runs-list">
-                {runs.runs && runs.runs.length === 0 ? (
-                  <div className="no-runs">No workflow runs found</div>
-                ) : (
-                  runs.runs.map(run => (
-                    <div key={run.id} className="run-item">
-                      <div className={`run-header ${getStatusClass(run.status, run.conclusion)}`}>
-                        <div className="run-status-icon">
-                          {getStatusIcon(run.status, run.conclusion)}
-                        </div>
-                        <div className="run-info-details">
-                          <div className="run-name">{run.name}</div>
-                          <div className="run-meta">
-                            <span className="run-branch">⎇ {run.branch}</span>
-                            <span className="run-commit">{run.commit_sha}</span>
-                            <span className="run-author">{run.author}</span>
-                            <span className="run-time">{formatTime(run.created_at)}</span>
+            <div className="modal-body">
+              {loadingRuns ? (
+                <div className="loading-message">Loading workflow runs...</div>
+              ) : (
+                <div className="workflow-runs">
+                  {runs.runs && runs.runs.length === 0 ? (
+                    <div className="loading-message">No workflow runs found</div>
+                  ) : (
+                    runs.runs.map(run => (
+                      <div key={run.id} className="workflow-run">
+                        <div className="run-header">
+                          <div className="run-info">
+                            <div className="run-commit">{run.commit_sha}</div>
+                            <div className="run-meta">
+                              ⎇ {run.branch} · by {run.author} · {formatTime(run.created_at)}
+                              {run.duration && ` · ${formatDuration(run.duration)}`}
+                            </div>
+                          </div>
+                          <div className={`run-status ${getStatusClass(run.status, run.conclusion)}`}>
+                            {run.status === 'completed' ? run.conclusion : run.status}
                           </div>
                         </div>
-                        <div className="run-actions">
-                          {run.duration && (
-                            <span className="run-duration">{formatDuration(run.duration)}</span>
-                          )}
-                          <button 
-                            className="btn-view-jobs"
-                            onClick={() => fetchJobsForRun(runs.deployment_id, run.id)}
-                          >
-                            View Jobs
-                          </button>
-                          <a 
-                            href={run.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-github"
-                          >
-                            GitHub →
-                          </a>
-                        </div>
+
+                        {jobs && jobs.runId === run.id && (
+                          <div className="run-jobs">
+                            {loadingJobs ? (
+                              <div className="loading-message">Loading jobs...</div>
+                            ) : (
+                              <>
+                                {jobs.jobs && jobs.jobs.map(job => (
+                                  <div key={job.id} className="job-item">
+                                    <div className="job-name">
+                                      <span className={`job-status-icon ${getStatusClass(job.status, job.conclusion).replace('status-', '')}`}>
+                                        {getStatusIcon(job.status, job.conclusion)}
+                                      </span>
+                                      {job.name}
+                                    </div>
+                                    {job.duration && (
+                                      <div className="job-duration">{formatDuration(job.duration)}</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
-
-                      {jobs && jobs.runId === run.id && (
-                        <div className="run-jobs-section">
-                          {loadingJobs ? (
-                            <div className="jobs-loading">Loading jobs...</div>
-                          ) : (
-                            <div className="jobs-list-inline">
-                              {jobs.jobs && jobs.jobs.map(job => (
-                                <div key={job.id} className="job-card">
-                                  <div className={`job-header ${getStatusClass(job.status, job.conclusion)}`}>
-                                    <span className="job-status-icon">
-                                      {getStatusIcon(job.status, job.conclusion)}
-                                    </span>
-                                    <span className="job-name">{job.name}</span>
-                                  </div>
-                                  <div className="job-steps">
-                                    {job.steps && job.steps.map((step, idx) => (
-                                      <div key={idx} className={`step-item ${getStatusClass(step.status, step.conclusion)}`}>
-                                        <span className="step-number">{step.number}</span>
-                                        <span className="step-icon">{getStatusIcon(step.status, step.conclusion)}</span>
-                                        <span className="step-name">{step.name}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="run-commit-message">{run.commit_message}</div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
