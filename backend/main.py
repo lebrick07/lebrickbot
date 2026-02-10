@@ -692,13 +692,23 @@ CUSTOMER_REPOS = {
 @app.get("/deployments/{deployment_id}/pipeline")
 async def get_deployment_pipeline(deployment_id: str):
     """Get GitHub Actions pipeline runs for a deployment"""
-    # Parse deployment_id (format: customer-env-app)
+    # Parse deployment_id (format: namespace-app where namespace=customer-env)
+    # Example: acme-corp-dev-acme-corp-api
+    # Extract namespace (everything before the last app name)
     parts = deployment_id.split('-')
-    if len(parts) < 2:
-        raise HTTPException(status_code=400, detail="Invalid deployment ID")
     
-    customer = '-'.join(parts[:-1]) if parts[-1] in ['dev', 'preprod', 'prod'] else parts[0]
-    environment = parts[-1] if parts[-1] in ['dev', 'preprod', 'prod'] else 'dev'
+    # Try to find environment in the ID
+    env_index = -1
+    for i, part in enumerate(parts):
+        if part in ['dev', 'preprod', 'prod']:
+            env_index = i
+            break
+    
+    if env_index == -1:
+        return {'runs': [], 'total': 0, 'error': 'Could not parse environment from deployment ID'}
+    
+    customer = '-'.join(parts[:env_index])
+    environment = parts[env_index]
     
     # Get GitHub repo
     repo = CUSTOMER_REPOS.get(customer)
@@ -838,5 +848,82 @@ async def get_pipeline_jobs(deployment_id: str, run_id: int):
     except Exception as e:
         return {
             'jobs': [],
+            'error': str(e)
+        }
+
+@app.get("/pipelines/status")
+async def get_all_pipelines_status():
+    """Get pipeline status summary for all customers"""
+    customers = {
+        'acme-corp': 'lebrick07/acme-corp-api',
+        'techstart': 'lebrick07/techstart-webapp',
+        'widgetco': 'lebrick07/widgetco-api'
+    }
+    
+    github_token = os.getenv('GITHUB_TOKEN', '')
+    headers = {
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    if github_token:
+        headers['Authorization'] = f'token {github_token}'
+    
+    results = []
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            for customer_id, repo in customers.items():
+                try:
+                    response = await client.get(
+                        f'https://api.github.com/repos/{repo}/actions/runs',
+                        headers=headers,
+                        params={'per_page': 1, 'page': 1, 'branch': 'develop'}
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        runs = data.get('workflow_runs', [])
+                        
+                        if runs:
+                            latest = runs[0]
+                            results.append({
+                                'customer_id': customer_id,
+                                'repo': repo,
+                                'status': latest['status'],
+                                'conclusion': latest.get('conclusion'),
+                                'branch': latest['head_branch'],
+                                'commit_sha': latest['head_sha'][:7],
+                                'run_id': latest['id'],
+                                'url': latest['html_url'],
+                                'created_at': latest['created_at']
+                            })
+                        else:
+                            results.append({
+                                'customer_id': customer_id,
+                                'repo': repo,
+                                'status': 'no_runs',
+                                'conclusion': None
+                            })
+                    else:
+                        results.append({
+                            'customer_id': customer_id,
+                            'repo': repo,
+                            'status': 'error',
+                            'error': f'GitHub API returned {response.status_code}'
+                        })
+                except Exception as e:
+                    results.append({
+                        'customer_id': customer_id,
+                        'repo': repo,
+                        'status': 'error',
+                        'error': str(e)
+                    })
+        
+        return {
+            'pipelines': results,
+            'total': len(results)
+        }
+    except Exception as e:
+        return {
+            'pipelines': [],
             'error': str(e)
         }

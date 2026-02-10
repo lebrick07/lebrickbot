@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './CustomerDeploymentsView.css'
 import DeploymentDetails from './DeploymentDetails'
+import PipelineStatus from './PipelineStatus'
 
 function CustomerDeploymentsView() {
   const [customers, setCustomers] = useState([])
@@ -179,6 +180,8 @@ function CustomerDeploymentsView() {
                   </div>
                 </div>
               </div>
+
+              <PipelineStatus customerId={customer.id} />
 
               <div className="customer-footer">
                 <a 
