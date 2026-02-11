@@ -833,7 +833,66 @@ async def create_customer(request: Request):
                 'error': f'Failed to check GitHub repository: {repo_response.status_code}'
             })
         
-        # Step 2: Store integrations
+        # Step 2: Create Customer record in database
+        if db_available:
+            try:
+                from database import SessionLocal
+                db = SessionLocal()
+                try:
+                    # Check if customer already exists
+                    existing_customer = db.query(Customer).filter(Customer.id == customer_id).first()
+                    if not existing_customer:
+                        customer = Customer(
+                            id=customer_id,
+                            name=customer_name,
+                            stack=stack
+                        )
+                        db.add(customer)
+                        db.commit()
+                        print(f"✅ Created customer record: {customer_name} ({customer_id})")
+                    else:
+                        print(f"ℹ️  Customer record already exists: {customer_name} ({customer_id})")
+                except Exception as db_error:
+                    db.rollback()
+                    print(f"⚠️  Failed to create customer record: {db_error}")
+                finally:
+                    db.close()
+            except Exception as e:
+                print(f"Database error: {e}")
+        
+        # Step 3: Store integrations (database + in-memory)
+        if db_available:
+            try:
+                from database import SessionLocal
+                db = SessionLocal()
+                try:
+                    # Create GitHub integration
+                    github_integration = Integration(
+                        customer_id=customer_id,
+                        type='github',
+                        config=github
+                    )
+                    db.add(github_integration)
+                    
+                    # Create ArgoCD integration
+                    argocd_integration = Integration(
+                        customer_id=customer_id,
+                        type='argocd',
+                        config=argocd
+                    )
+                    db.add(argocd_integration)
+                    
+                    db.commit()
+                    print(f"✅ Created integrations for {customer_id}")
+                except Exception as db_error:
+                    db.rollback()
+                    print(f"⚠️  Failed to create integrations: {db_error}")
+                finally:
+                    db.close()
+            except Exception as e:
+                print(f"Database error: {e}")
+        
+        # Also store in memory (backward compatibility)
         if customer_id not in integrations_store:
             integrations_store[customer_id] = {}
         
@@ -841,7 +900,7 @@ async def create_customer(request: Request):
         integrations_store[customer_id]['argocd'] = argocd
         save_integrations()  # Persist to disk
         
-        # Step 3: Create K8s namespaces (if k8s available)
+        # Step 4: Create K8s namespaces (if k8s available)
         namespaces_created = []
         if k8s_available:
             try:
@@ -874,7 +933,7 @@ async def create_customer(request: Request):
                 print(f"K8s namespace creation error: {k8s_error}")
                 result['k8s']['error'] = str(k8s_error)
         
-        # Step 4: Create ArgoCD applications (placeholder - would need ArgoCD API)
+        # Step 5: Create ArgoCD applications (placeholder - would need ArgoCD API)
         result['argocd']['applications'] = [
             f"{customer_id}-dev",
             f"{customer_id}-preprod",
@@ -882,7 +941,7 @@ async def create_customer(request: Request):
         ]
         result['argocd']['message'] = 'ArgoCD applications configured (manual sync required)'
         
-        # Step 5: Push CI/CD templates to GitHub repo
+        # Step 6: Push CI/CD templates to GitHub repo
         template_result = initialize_customer_repo(customer_id, customer_name, stack, github)
         result['github'].update(template_result)
         
