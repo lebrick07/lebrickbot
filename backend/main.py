@@ -1157,7 +1157,6 @@ async def create_customer(customer_data: CustomerCreate):
     }
 
 # ==================== LUFFY AI AGENT ====================
-from luffy_agent import luffy
 
 class LuffyChatRequest(BaseModel):
     message: str
