@@ -714,6 +714,142 @@ async def create_customer(request: Request):
         ]
         result['argocd']['message'] = 'ArgoCD applications configured (manual sync required)'
         
+        # Step 5: Push CI/CD templates to GitHub repo
+        try:
+            from pathlib import Path
+            import base64
+            
+            templates_dir = Path(__file__).parent / 'templates'
+            
+            # Map stack to template files
+            stack_templates = {
+                'nodejs': {
+                    '.github/workflows/ci.yaml': 'workflow-nodejs.yaml',
+                    'Dockerfile': 'Dockerfile-nodejs',
+                    'index.js': 'app-nodejs.js',
+                    'package.json': 'package.json',
+                    '.gitignore': 'gitignore',
+                    'README.md': 'README.md',
+                    'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                    'k8s/service.yaml': 'k8s-service.yaml',
+                },
+                'python': {
+                    '.github/workflows/ci.yaml': 'workflow-python.yaml',
+                    'Dockerfile': 'Dockerfile-python',
+                    'app.py': 'app-python.py',
+                    'requirements.txt': 'requirements.txt',
+                    '.gitignore': 'gitignore',
+                    'README.md': 'README.md',
+                    'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                    'k8s/service.yaml': 'k8s-service.yaml',
+                },
+                'golang': {
+                    '.github/workflows/ci.yaml': 'workflow-golang.yaml',
+                    'Dockerfile': 'Dockerfile-golang',
+                    'main.go': 'app-golang.go',
+                    'go.mod': 'go.mod',
+                    '.gitignore': 'gitignore',
+                    'README.md': 'README.md',
+                    'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                    'k8s/service.yaml': 'k8s-service.yaml',
+                }
+            }
+            
+            # Stack-specific instructions for README
+            stack_instructions = {
+                'nodejs': '''```bash
+npm install
+npm start
+```
+
+Visit: http://localhost:3000''',
+                'python': '''```bash
+pip install -r requirements.txt
+python main.py
+```
+
+Visit: http://localhost:8000''',
+                'go': '''```bash
+go mod download
+go run main.go
+```
+
+Visit: http://localhost:8080'''
+            }
+            
+            if stack in stack_templates:
+                files_pushed = []
+                
+                for target_path, template_file in stack_templates[stack].items():
+                    template_path = templates_dir / template_file
+                    
+                    if not template_path.exists():
+                        print(f"Template not found: {template_path}")
+                        continue
+                    
+                    # Read template content
+                    with open(template_path, 'r') as f:
+                        content = f.read()
+                    
+                    # Replace placeholders
+                    stack_info = {
+                        'nodejs': {'framework': 'Express.js', 'port': '3000'},
+                        'python': {'framework': 'FastAPI', 'port': '8000'},
+                        'golang': {'framework': 'net/http', 'port': '8080'},
+                    }
+                    
+                    info = stack_info.get(stack, {'framework': 'Unknown', 'port': '8000'})
+                    
+                    content = content.replace('{{CUSTOMER_ID}}', customer_id)
+                    content = content.replace('{{CUSTOMER_NAME}}', customer_name)
+                    content = content.replace('{{GITHUB_OWNER}}', github['org'])
+                    content = content.replace('{{REPO_NAME}}', github['repo'])
+                    content = content.replace('{{STACK}}', stack.title())
+                    content = content.replace('{{FRAMEWORK}}', info['framework'])
+                    content = content.replace('{{PORT}}', info['port'])
+                    content = content.replace('{{APP_NAME}}', github['repo'])
+                    content = content.replace('{{NAMESPACE}}', f"{customer_id}-dev")  # Default to dev
+                    content = content.replace('{{ENVIRONMENT}}', 'development')
+                    content = content.replace('{{STACK_SETUP}}', stack_instructions.get(stack, ''))
+                    
+                    # Push file to GitHub using GitHub API
+                    file_url = f"https://api.github.com/repos/{github['org']}/{github['repo']}/contents/{target_path}"
+                    
+                    # Check if file exists
+                    check_response = requests.get(file_url, headers={
+                        'Authorization': f"token {github['token']}",
+                        'Accept': 'application/vnd.github.v3+json'
+                    })
+                    
+                    file_data = {
+                        'message': f'Add {target_path} via OpenLuffy',
+                        'content': base64.b64encode(content.encode()).decode(),
+                        'branch': github.get('branch', 'main')
+                    }
+                    
+                    if check_response.status_code == 200:
+                        # File exists, update it
+                        existing_file = check_response.json()
+                        file_data['sha'] = existing_file['sha']
+                    
+                    # Create or update file
+                    push_response = requests.put(file_url, json=file_data, headers={
+                        'Authorization': f"token {github['token']}",
+                        'Accept': 'application/vnd.github.v3+json'
+                    })
+                    
+                    if push_response.ok:
+                        files_pushed.append(target_path)
+                    else:
+                        print(f"Failed to push {target_path}: {push_response.status_code}")
+                
+                result['github']['templates_pushed'] = files_pushed
+                result['github']['message'] = f'Repository initialized with {len(files_pushed)} files'
+            
+        except Exception as e:
+            print(f"Failed to push templates: {e}")
+            result['github']['template_error'] = str(e)
+        
         return result
         
     except Exception as e:
