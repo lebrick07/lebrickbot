@@ -57,6 +57,14 @@ spec:
                   name: {{ .Release.Name }}-api-keys
                   key: claude-api-key
                   optional: false
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-api-keys
+                  key: github-token
+                  optional: true
+            - name: GITHUB_ORG
+              value: {{ .Values.secrets.githubOrg | quote }}
             {{- if .Values.postgres.enabled }}
             - name: POSTGRES_USER
               valueFrom:
