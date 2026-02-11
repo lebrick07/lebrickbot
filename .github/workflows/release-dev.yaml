@@ -110,10 +110,12 @@ jobs:
                 parameters:
                   - name: secrets.claudeApiKey
                     value: "${{ secrets.ANTHROPIC_API_KEY }}"
+                  - name: secrets.githubToken
+                    value: "${{ secrets.GH_PAT }}"
           EOF
           
           kubectl patch application openluffy-dev -n argocd --type merge --patch-file /tmp/dev-patch.yaml
-          echo "✅ Dev application patched with secret"
+          echo "✅ Dev application patched with secrets"
           
           # Update openluffy-preprod Application
           cat > /tmp/preprod-patch.yaml << 'EOF'
@@ -123,10 +125,12 @@ jobs:
                 parameters:
                   - name: secrets.claudeApiKey
                     value: "${{ secrets.ANTHROPIC_API_KEY }}"
+                  - name: secrets.githubToken
+                    value: "${{ secrets.GH_PAT }}"
           EOF
           
           kubectl patch application openluffy-preprod -n argocd --type merge --patch-file /tmp/preprod-patch.yaml
-          echo "✅ Preprod application patched with secret"
+          echo "✅ Preprod application patched with secrets"
           
           # Trigger ArgoCD sync
           kubectl patch application openluffy-dev -n argocd -p '{"operation":{"sync":{}}}' --type merge

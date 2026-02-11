@@ -14,6 +14,7 @@ from datetime import datetime
 from triage import triage_engine
 from luffy_agent import get_agent
 from database import init_db, get_db, check_db_connection, Customer, Integration, ProvisioningStep
+from init_github_integrations import init_github_integrations
 
 app = FastAPI(title="openluffy")
 
@@ -79,6 +80,15 @@ async def startup_event():
                     
                     # Migrate existing integrations_store to database
                     await migrate_integrations_to_db()
+                    
+                    # Initialize GitHub integrations for all customers
+                    from database import SessionLocal
+                    db = SessionLocal()
+                    try:
+                        init_github_integrations(db)
+                    finally:
+                        db.close()
+                    
                     break
                 else:
                     raise Exception("Connection check failed")
