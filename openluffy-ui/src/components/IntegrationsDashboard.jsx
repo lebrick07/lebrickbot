@@ -44,6 +44,49 @@ const availableIntegrations = [
     ]
   },
   {
+    id: 'github',
+    name: 'GitHub',
+    icon: '⚙️',
+    description: 'Connect your GitHub organization for automated customer onboarding',
+    helpText: 'Required for "Create Customer" feature. Luffy will create repos, configure CI/CD pipelines, and raise PRs automatically.',
+    configFields: [
+      { 
+        name: 'org', 
+        label: 'Organization / Username', 
+        type: 'text', 
+        placeholder: 'lebrick07',
+        required: true,
+        helpText: 'Your GitHub username or organization name where customer repos will be created'
+      },
+      { 
+        name: 'token', 
+        label: 'Personal Access Token', 
+        type: 'password', 
+        required: true,
+        helpText: 'Token needs: repo, workflow, read:org scopes'
+      },
+      {
+        name: 'templateRepo',
+        label: 'Template Repository',
+        type: 'text',
+        placeholder: 'lebrick07/openluffy-templates',
+        required: true,
+        helpText: 'Repository containing customer templates (Node.js, Python, Go)'
+      }
+    ],
+    instructions: {
+      title: 'How to Generate a GitHub Token',
+      steps: [
+        'Click "Generate Token" below to open GitHub',
+        'Confirm the scopes: repo, workflow, read:org',
+        'Click "Generate token" at the bottom',
+        'Copy the token and paste it above',
+        'Click "Test Connection" to verify'
+      ],
+      tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,workflow,read:org&description=OpenLuffy+Integration'
+    }
+  },
+  {
     id: 'ghcr',
     name: 'GitHub Container Registry',
     icon: '📦',
@@ -174,6 +217,8 @@ function IntegrationsDashboard() {
   const [selectedToAdd, setSelectedToAdd] = useState(null)
   const [configData, setConfigData] = useState({})
   const [loading, setLoading] = useState(true)
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [testResult, setTestResult] = useState(null)
 
   // Fetch real connected integrations
   useEffect(() => {
@@ -276,7 +321,57 @@ function IntegrationsDashboard() {
   const handleAddIntegration = (integration) => {
     setSelectedToAdd(integration)
     setConfigData({})
+    setTestResult(null)
     setShowAddModal(true)
+  }
+
+  const handleTestConnection = async () => {
+    if (selectedToAdd.id !== 'github') return
+    
+    setTestingConnection(true)
+    setTestResult(null)
+
+    try {
+      // Test GitHub API with provided token and org
+      const response = await fetch('https://api.github.com/user', {
+        headers: {
+          'Authorization': `token ${configData.token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Invalid token or insufficient permissions')
+      }
+
+      const userData = await response.json()
+
+      // Check if org exists (if different from user)
+      if (configData.org && configData.org !== userData.login) {
+        const orgResponse = await fetch(`https://api.github.com/orgs/${configData.org}`, {
+          headers: {
+            'Authorization': `token ${configData.token}`,
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        })
+
+        if (!orgResponse.ok) {
+          throw new Error(`Organization "${configData.org}" not found or no access`)
+        }
+      }
+
+      setTestResult({ 
+        success: true, 
+        message: `✅ Connected as ${userData.login}. Token verified!` 
+      })
+    } catch (error) {
+      setTestResult({ 
+        success: false, 
+        message: `❌ Connection failed: ${error.message}` 
+      })
+    } finally {
+      setTestingConnection(false)
+    }
   }
 
   const handleConfigChange = (field, value) => {
@@ -434,6 +529,31 @@ function IntegrationsDashboard() {
             <div className="modal-body">
               <p className="integration-description">{selectedToAdd.description}</p>
               
+              {selectedToAdd.helpText && (
+                <div className="integration-help-box">
+                  <span className="help-icon">💡</span>
+                  <p>{selectedToAdd.helpText}</p>
+                </div>
+              )}
+
+              {selectedToAdd.instructions && (
+                <div className="integration-instructions">
+                  <h4>{selectedToAdd.instructions.title}</h4>
+                  <ol>
+                    {selectedToAdd.instructions.steps.map((step, idx) => (
+                      <li key={idx}>{step}</li>
+                    ))}
+                  </ol>
+                  <button 
+                    type="button"
+                    className="btn-generate-token"
+                    onClick={() => window.open(selectedToAdd.instructions.tokenUrl, '_blank')}
+                  >
+                    🔗 Generate Token on GitHub
+                  </button>
+                </div>
+              )}
+              
               <form className="integration-form">
                 {selectedToAdd.configFields.map(field => (
                   <div key={field.name} className="form-group">
@@ -441,25 +561,61 @@ function IntegrationsDashboard() {
                       {field.label}
                       {field.required && <span className="required">*</span>}
                     </label>
-                    <input
-                      type={field.type}
-                      placeholder={field.placeholder || ''}
-                      value={configData[field.name] || ''}
-                      onChange={(e) => handleConfigChange(field.name, e.target.value)}
-                      required={field.required}
-                    />
+                    {field.helpText && (
+                      <small className="field-help">{field.helpText}</small>
+                    )}
+                    {field.type === 'textarea' ? (
+                      <textarea
+                        placeholder={field.placeholder || ''}
+                        value={configData[field.name] || ''}
+                        onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                        required={field.required}
+                        rows={4}
+                      />
+                    ) : (
+                      <input
+                        type={field.type}
+                        placeholder={field.placeholder || ''}
+                        value={configData[field.name] || ''}
+                        onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                        required={field.required}
+                      />
+                    )}
                   </div>
                 ))}
               </form>
             </div>
 
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setShowAddModal(false)}>
-                Cancel
-              </button>
-              <button className="btn-primary" onClick={handleSaveIntegration}>
-                Save & Connect
-              </button>
+              {testResult && (
+                <div className={`test-result ${testResult.success ? 'test-success' : 'test-error'}`}>
+                  {testResult.message}
+                </div>
+              )}
+              
+              <div className="modal-footer-actions">
+                <button className="btn-secondary" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </button>
+                
+                {selectedToAdd.id === 'github' && (
+                  <button 
+                    className="btn-test" 
+                    onClick={handleTestConnection}
+                    disabled={!configData.token || !configData.org || testingConnection}
+                  >
+                    {testingConnection ? '⏳ Testing...' : '🔍 Test Connection'}
+                  </button>
+                )}
+                
+                <button 
+                  className="btn-primary" 
+                  onClick={handleSaveIntegration}
+                  disabled={selectedToAdd.id === 'github' && !testResult?.success}
+                >
+                  Save & Connect
+                </button>
+              </div>
             </div>
           </div>
         </div>
