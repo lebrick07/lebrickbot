@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useCustomer } from '../contexts/CustomerContext'
 import './IntegrationsDashboard.css'
 
 // Available integrations that can be added
@@ -47,16 +48,24 @@ const availableIntegrations = [
     id: 'github',
     name: 'GitHub',
     icon: '⚙️',
-    description: 'Connect your GitHub organization for automated customer onboarding',
-    helpText: 'Required for "Create Customer" feature. Luffy will create repos, configure CI/CD pipelines, and raise PRs automatically.',
+    description: 'Connect this customer\'s GitHub repository',
+    helpText: 'Configure the GitHub repo where this customer\'s application code lives. Used for CI/CD pipeline integration and automated deployments.',
     configFields: [
       { 
         name: 'org', 
-        label: 'Organization / Username', 
+        label: 'Repository Owner', 
         type: 'text', 
-        placeholder: 'lebrick07',
+        placeholder: 'acme-corp',
         required: true,
-        helpText: 'Your GitHub username or organization name where customer repos will be created'
+        helpText: 'GitHub username or organization that owns the repository'
+      },
+      { 
+        name: 'repo', 
+        label: 'Repository Name', 
+        type: 'text', 
+        placeholder: 'acme-corp-api',
+        required: true,
+        helpText: 'Name of the repository (without owner)'
       },
       { 
         name: 'token', 
@@ -66,12 +75,12 @@ const availableIntegrations = [
         helpText: 'Token needs: repo, workflow, read:org scopes'
       },
       {
-        name: 'templateRepo',
-        label: 'Template Repository',
+        name: 'branch',
+        label: 'Default Branch',
         type: 'text',
-        placeholder: 'lebrick07/openluffy-templates',
-        required: true,
-        helpText: 'Repository containing customer templates (Node.js, Python, Go)'
+        placeholder: 'main',
+        required: false,
+        helpText: 'Main branch to track (default: main)'
       }
     ],
     instructions: {
@@ -212,6 +221,7 @@ const availableIntegrations = [
 ]
 
 function IntegrationsDashboard() {
+  const { activeCustomer } = useCustomer()
   const [connectedIntegrations, setConnectedIntegrations] = useState([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedToAdd, setSelectedToAdd] = useState(null)
@@ -220,10 +230,16 @@ function IntegrationsDashboard() {
   const [testingConnection, setTestingConnection] = useState(false)
   const [testResult, setTestResult] = useState(null)
 
-  // Fetch real connected integrations
+  // Fetch real connected integrations (per customer)
   useEffect(() => {
-    fetchConnectedIntegrations()
-  }, [])
+    if (activeCustomer) {
+      fetchConnectedIntegrations()
+    } else {
+      setConnectedIntegrations([])
+      setLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCustomer])
 
   const fetchConnectedIntegrations = async () => {
     setLoading(true)
@@ -272,8 +288,15 @@ function IntegrationsDashboard() {
   }
 
   const fetchGitHubStatus = async () => {
+    if (!activeCustomer) return null
+    
     try {
-      // TODO: Call GitHub API to get real status
+      // TODO: Fetch customer's GitHub config from backend API
+      // For now, derive from customer ID (e.g., acme-corp → acme-corp/api)
+      const repoOwner = activeCustomer.id  // e.g., acme-corp
+      const repoName = activeCustomer.app || `${activeCustomer.id}-api`  // e.g., acme-corp-api
+      const repoUrl = `https://github.com/${repoOwner}/${repoName}`
+      
       return {
         id: 'github',
         name: 'GitHub',
@@ -281,11 +304,12 @@ function IntegrationsDashboard() {
         status: 'connected',
         statusText: 'Connected',
         metrics: {
-          'Repository': 'lebrick07/openluffy',
+          'Repository': `${repoOwner}/${repoName}`,
+          'Customer': activeCustomer.name,
           'Status': 'Ready to query'
         },
         actions: ['View Repo', 'Workflows', 'Configure'],
-        url: 'https://github.com/lebrick07/openluffy'
+        url: repoUrl
       }
     } catch (error) {
       return null
@@ -332,37 +356,44 @@ function IntegrationsDashboard() {
     setTestResult(null)
 
     try {
-      // Test GitHub API with provided token and org
-      const response = await fetch('https://api.github.com/user', {
+      // Validate token by checking user
+      const userResponse = await fetch('https://api.github.com/user', {
         headers: {
           'Authorization': `token ${configData.token}`,
           'Accept': 'application/vnd.github.v3+json'
         }
       })
 
-      if (!response.ok) {
+      if (!userResponse.ok) {
         throw new Error('Invalid token or insufficient permissions')
       }
 
-      const userData = await response.json()
+      const userData = await userResponse.json()
 
-      // Check if org exists (if different from user)
-      if (configData.org && configData.org !== userData.login) {
-        const orgResponse = await fetch(`https://api.github.com/orgs/${configData.org}`, {
-          headers: {
-            'Authorization': `token ${configData.token}`,
-            'Accept': 'application/vnd.github.v3+json'
-          }
-        })
-
-        if (!orgResponse.ok) {
-          throw new Error(`Organization "${configData.org}" not found or no access`)
-        }
+      // Check if the repository exists
+      if (!configData.org || !configData.repo) {
+        throw new Error('Repository owner and name are required')
       }
+
+      const repoResponse = await fetch(`https://api.github.com/repos/${configData.org}/${configData.repo}`, {
+        headers: {
+          'Authorization': `token ${configData.token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      })
+
+      if (!repoResponse.ok) {
+        if (repoResponse.status === 404) {
+          throw new Error(`Repository "${configData.org}/${configData.repo}" not found or no access`)
+        }
+        throw new Error('Unable to access repository')
+      }
+
+      const repoData = await repoResponse.json()
 
       setTestResult({ 
         success: true, 
-        message: `✅ Connected as ${userData.login}. Token verified!` 
+        message: `✅ Connected as ${userData.login}. Repository "${repoData.full_name}" accessible!` 
       })
     } catch (error) {
       setTestResult({ 
@@ -413,12 +444,31 @@ function IntegrationsDashboard() {
     )
   }
 
+  // Show message if no customer selected
+  if (!activeCustomer) {
+    return (
+      <div className="integrations-dashboard">
+        <div className="integrations-header">
+          <div className="header-content">
+            <h2>🔗 DevOps Integrations</h2>
+            <p>Select a customer to view their integrations</p>
+          </div>
+        </div>
+        <div className="empty-state">
+          <div className="empty-icon">🏢</div>
+          <h3>No Customer Selected</h3>
+          <p>Select a customer from the dropdown to view and manage their integrations.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="integrations-dashboard">
       <div className="integrations-header">
         <div className="header-content">
           <h2>🔗 DevOps Integrations</h2>
-          <p>Connect your DevOps tools</p>
+          <p>Connect {activeCustomer.name}'s DevOps tools</p>
         </div>
         
         <div className="status-summary">
@@ -602,7 +652,7 @@ function IntegrationsDashboard() {
                   <button 
                     className="btn-test" 
                     onClick={handleTestConnection}
-                    disabled={!configData.token || !configData.org || testingConnection}
+                    disabled={!configData.token || !configData.org || !configData.repo || testingConnection}
                   >
                     {testingConnection ? '⏳ Testing...' : '🔍 Test Connection'}
                   </button>
