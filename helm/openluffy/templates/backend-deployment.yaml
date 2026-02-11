@@ -42,6 +42,25 @@ spec:
                   name: {{ .Release.Name }}-api-keys
                   key: claude-api-key
                   optional: false
+            {{- if .Values.postgres.enabled }}
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include \"openluffy.fullname\" . }}-postgres:5432/$(POSTGRES_DB)"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openluffy.fullname" . }}-postgres
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openluffy.fullname" . }}-postgres
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openluffy.fullname" . }}-postgres
+                  key: POSTGRES_DB
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
