@@ -234,7 +234,7 @@ def get_tools() -> List[Dict[str, Any]]:
         },
         {
             "name": "create_customer",
-            "description": "Create a new customer in OpenLuffy with GitHub repo and ArgoCD applications. This will create the customer record, GitHub repo (if needed), push CI/CD templates, create K8s namespaces, and set up ArgoCD applications for dev, preprod, and prod environments.",
+            "description": "Create a new customer in OpenLuffy with GitHub repo and ArgoCD applications. Smart defaults: ID auto-generated from name, GitHub org defaults to 'lebrick07', repo defaults to '{id}-api', ArgoCD URL defaults to 'http://argocd.local'. Only GitHub token is required.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -242,37 +242,37 @@ def get_tools() -> List[Dict[str, Any]]:
                         "type": "string",
                         "description": "Customer display name (e.g., 'Acme Corp')"
                     },
-                    "id": {
-                        "type": "string",
-                        "description": "Customer ID slug (e.g., 'acme-corp'). Must be lowercase with hyphens."
-                    },
                     "stack": {
                         "type": "string",
-                        "description": "Tech stack: 'nodejs', 'python', or 'golang'",
+                        "description": "Tech stack: 'nodejs', 'python', or 'golang'. Defaults to 'nodejs'.",
                         "enum": ["nodejs", "python", "golang"]
-                    },
-                    "github_org": {
-                        "type": "string",
-                        "description": "GitHub organization or username (e.g., 'lebrick07')"
-                    },
-                    "github_repo": {
-                        "type": "string",
-                        "description": "GitHub repository name (e.g., 'acme-corp-api')"
                     },
                     "github_token": {
                         "type": "string",
-                        "description": "GitHub personal access token with repo permissions"
+                        "description": "GitHub personal access token with repo permissions (required)"
+                    },
+                    "id": {
+                        "type": "string",
+                        "description": "Optional: Customer ID slug (e.g., 'acme-corp'). Auto-generated from name if not provided."
+                    },
+                    "github_org": {
+                        "type": "string",
+                        "description": "Optional: GitHub organization or username. Defaults to 'lebrick07'."
+                    },
+                    "github_repo": {
+                        "type": "string",
+                        "description": "Optional: GitHub repository name. Defaults to '{customer-id}-api'."
                     },
                     "argocd_url": {
                         "type": "string",
-                        "description": "ArgoCD URL (e.g., 'http://argocd.local')"
+                        "description": "Optional: ArgoCD URL. Defaults to 'http://argocd.local'."
                     },
                     "argocd_token": {
                         "type": "string",
-                        "description": "ArgoCD API token"
+                        "description": "Optional: ArgoCD API token. If not provided, will use default from environment."
                     }
                 },
-                "required": ["name", "id", "stack", "github_org", "github_repo", "github_token", "argocd_url", "argocd_token"]
+                "required": ["name", "github_token"]
             }
         },
         {
@@ -860,24 +860,53 @@ async def get_platform_health() -> Dict[str, Any]:
 
 
 async def create_customer(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a new customer via backend API"""
+    """Create a new customer via backend API with smart defaults"""
     try:
         import httpx
+        import os
         
-        # Call the backend create customer endpoint
+        # Apply smart defaults
+        customer_name = params["name"]
+        
+        # Auto-generate ID from name if not provided
+        if "id" not in params or not params["id"]:
+            customer_id = customer_name.lower().replace(" ", "-").replace("_", "-")
+            # Remove special characters
+            customer_id = ''.join(c for c in customer_id if c.isalnum() or c == '-')
+            # Remove duplicate hyphens
+            while '--' in customer_id:
+                customer_id = customer_id.replace('--', '-')
+            # Strip leading/trailing hyphens
+            customer_id = customer_id.strip('-')
+        else:
+            customer_id = params["id"]
+        
+        # Default values
+        stack = params.get("stack", "nodejs")
+        github_org = params.get("github_org", "lebrick07")
+        github_repo = params.get("github_repo", f"{customer_id}-api")
+        github_token = params["github_token"]  # Required
+        argocd_url = params.get("argocd_url", "http://argocd.local")
+        
+        # ArgoCD token - try to get from env if not provided
+        argocd_token = params.get("argocd_token")
+        if not argocd_token:
+            argocd_token = os.getenv("ARGOCD_TOKEN", "")
+        
+        # Build payload
         payload = {
-            "name": params["name"],
-            "id": params["id"],
-            "stack": params["stack"],
+            "name": customer_name,
+            "id": customer_id,
+            "stack": stack,
             "github": {
-                "org": params["github_org"],
-                "repo": params["github_repo"],
-                "token": params["github_token"],
+                "org": github_org,
+                "repo": github_repo,
+                "token": github_token,
                 "branch": "main"
             },
             "argocd": {
-                "url": params["argocd_url"],
-                "token": params["argocd_token"]
+                "url": argocd_url,
+                "token": argocd_token
             }
         }
         
