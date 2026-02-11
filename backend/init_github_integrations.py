@@ -4,7 +4,7 @@ Run this once to configure GitHub integrations if they don't exist
 """
 import os
 import httpx
-from database import get_db, Integration
+from database import get_db, Customer, Integration
 from sqlalchemy.orm import Session
 
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
@@ -12,11 +12,11 @@ GITHUB_ORG = os.getenv('GITHUB_ORG', 'lebrick07')
 
 # Customer → GitHub repo mapping
 CUSTOMER_REPOS = {
-    'acme-corp': 'acme-corp-api',
-    'openluffy': 'openluffy',
-    'philly-cheese-corp': 'philly-cheese-corp',
-    'techstart': 'techstart-webapp',
-    'widgetco': 'widgetco-api',
+    'acme-corp': {'name': 'Acme Corp', 'repo': 'acme-corp-api'},
+    'openluffy': {'name': 'OpenLuffy', 'repo': 'openluffy'},
+    'philly-cheese-corp': {'name': 'Philly Cheese Corp', 'repo': 'philly-cheese-corp'},
+    'techstart': {'name': 'Techstart', 'repo': 'techstart-webapp'},
+    'widgetco': {'name': 'Widgetco', 'repo': 'widgetco-api'},
 }
 
 def init_github_integrations(db: Session) -> None:
@@ -28,8 +28,22 @@ def init_github_integrations(db: Session) -> None:
     
     print("🔧 Initializing GitHub integrations...")
     
-    for customer_id, repo_name in CUSTOMER_REPOS.items():
+    for customer_id, info in CUSTOMER_REPOS.items():
         try:
+            # Ensure customer exists in database first
+            customer = db.query(Customer).filter(Customer.id == customer_id).first()
+            
+            if not customer:
+                # Create customer record
+                customer = Customer(
+                    id=customer_id,
+                    name=info['name'],
+                    repository=f"{GITHUB_ORG}/{info['repo']}"
+                )
+                db.add(customer)
+                db.commit()
+                print(f"   ✅ Created customer: {customer_id}")
+            
             # Check if integration already exists
             existing = db.query(Integration).filter(
                 Integration.customer_id == customer_id,
@@ -43,7 +57,7 @@ def init_github_integrations(db: Session) -> None:
             # Create new GitHub integration
             config = {
                 'org': GITHUB_ORG,
-                'repo': repo_name,
+                'repo': info['repo'],
                 'token': GITHUB_TOKEN,
                 'branch': 'main',
                 'enabled': True
@@ -57,7 +71,7 @@ def init_github_integrations(db: Session) -> None:
             db.add(integration)
             db.commit()
             
-            print(f"   ✅ {customer_id} → {GITHUB_ORG}/{repo_name} configured")
+            print(f"   ✅ {customer_id} → {GITHUB_ORG}/{info['repo']} configured")
             
         except Exception as e:
             print(f"   ❌ Failed to configure {customer_id}: {e}")
