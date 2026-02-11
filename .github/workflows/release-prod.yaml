@@ -100,7 +100,7 @@ jobs:
     needs: [build-and-push]
     
     steps:
-      - name: Update ArgoCD Application with secret parameter
+      - name: Update ArgoCD Application with secret parameters
         run: |
           # Update openluffy-prod Application
           cat > /tmp/prod-patch.yaml << 'EOF'
@@ -110,10 +110,12 @@ jobs:
                 parameters:
                   - name: secrets.claudeApiKey
                     value: "${{ secrets.ANTHROPIC_API_KEY }}"
+                  - name: secrets.githubToken
+                    value: "${{ secrets.GH_PAT }}"
           EOF
           
           kubectl patch application openluffy-prod -n argocd --type merge --patch-file /tmp/prod-patch.yaml
-          echo "✅ Prod application patched with secret"
+          echo "✅ Prod application patched with secrets"
           
           # Trigger ArgoCD sync
           kubectl patch application openluffy-prod -n argocd -p '{"operation":{"sync":{}}}' --type merge

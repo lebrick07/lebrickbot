@@ -60,3 +60,10 @@ secrets:
   # - or ArgoCD Application parameters (injected by workflow)
   # DO NOT commit actual secret values to git
   claudeApiKey: ""
+  
+  # githubToken should be set via:
+  # - helm install --set secrets.githubToken=$GITHUB_TOKEN
+  # - or ArgoCD Application parameters (injected by workflow)
+  # DO NOT commit actual secret values to git
+  githubToken: ""
+  githubOrg: "lebrick07"  # Default GitHub organization
