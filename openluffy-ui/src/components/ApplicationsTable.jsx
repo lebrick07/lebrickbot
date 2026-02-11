@@ -46,8 +46,8 @@ function ApplicationsTable({ selectedEnvironment }) {
     return 'status-error'
   }
 
-  const getPipelineStatus = (customerId) => {
-    // TODO: Get real pipeline status
+  const getPipelineStatus = () => {
+    // TODO: Get real pipeline status from API
     return '✓'
   }
 
@@ -75,18 +75,6 @@ function ApplicationsTable({ selectedEnvironment }) {
       console.log('Rollback:', deployment)
       alert('Rollback - Backend API coming soon')
     }
-  }
-
-  const handleRestart = (deployment, e) => {
-    e.stopPropagation()
-    console.log('Restart:', deployment)
-    alert(`Restart ${deployment.name} - Backend API coming soon`)
-  }
-
-  const handleEdit = (deployment, e) => {
-    e.stopPropagation()
-    console.log('Edit:', deployment)
-    alert('Edit - Backend API coming soon')
   }
 
   // Filter deployments
@@ -125,7 +113,10 @@ function ApplicationsTable({ selectedEnvironment }) {
           {filtered.length === 0 ? (
             <tr>
               <td colSpan="9" className="no-data">
-                No applications match the current filters
+                {!activeCustomer 
+                  ? '👤 Select a customer from the dropdown to view their applications'
+                  : `No applications found for ${activeCustomer.name}${selectedEnvironment !== 'all' ? ` in ${selectedEnvironment} environment` : ''}`
+                }
               </td>
             </tr>
           ) : (
@@ -163,7 +154,7 @@ function ApplicationsTable({ selectedEnvironment }) {
                 </td>
                 <td className="cell-pipeline">
                   <span className="pipeline-icon" title="Pipeline passing">
-                    {getPipelineStatus(deployment.customer)}
+                    {getPipelineStatus()}
                   </span>
                 </td>
                 <td className="cell-time">

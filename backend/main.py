@@ -1,19 +1,152 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
+from sqlalchemy.orm import Session
 import os
 import httpx
+import json
+from pathlib import Path
 from datetime import datetime
 from triage import triage_engine
 from luffy_agent import get_agent
+from database import init_db, get_db, check_db_connection, Customer, Integration, ProvisioningStep
 
 app = FastAPI(title="openluffy")
 
-# In-memory storage for integration configs (TODO: move to K8s secrets or Vault)
+# Database initialization flag
+db_available = False
+
+# Persistent storage for integration configs
+INTEGRATIONS_FILE = Path("/data/integrations.json")
 integrations_store: Dict[str, Dict[str, Any]] = {}
+
+def load_integrations():
+    """Load integrations from disk"""
+    global integrations_store
+    if INTEGRATIONS_FILE.exists():
+        try:
+            with open(INTEGRATIONS_FILE, 'r') as f:
+                integrations_store = json.load(f)
+                print(f"✅ Loaded {len(integrations_store)} customer integrations from disk")
+        except Exception as e:
+            print(f"⚠️ Failed to load integrations: {e}")
+            integrations_store = {}
+    else:
+        print("ℹ️ No existing integrations file, starting fresh")
+        integrations_store = {}
+
+def save_integrations():
+    """Save integrations to disk"""
+    try:
+        INTEGRATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(INTEGRATIONS_FILE, 'w') as f:
+            json.dump(integrations_store, f, indent=2)
+        print(f"💾 Saved integrations to disk ({len(integrations_store)} customers)")
+    except Exception as e:
+        print(f"⚠️ Failed to save integrations: {e}")
+
+# Load integrations on startup
+load_integrations()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup with retry logic"""
+    global db_available
+    import time
+    
+    # Check if DATABASE_URL is set
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        print(f"🗄️ Database URL configured: {database_url.split('@')[0]}@...")  # Hide credentials
+        
+        # Retry logic: wait for database to be fully ready
+        max_retries = 30  # 30 retries * 2s = 60s max wait
+        retry_delay = 2
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                print(f"📊 Database connection attempt {attempt}/{max_retries}...")
+                init_db()
+                
+                if check_db_connection():
+                    db_available = True
+                    print("✅ Database connection successful")
+                    
+                    # Migrate existing integrations_store to database
+                    await migrate_integrations_to_db()
+                    break
+                else:
+                    raise Exception("Connection check failed")
+                    
+            except Exception as e:
+                if attempt < max_retries:
+                    print(f"⚠️ Database not ready yet: {e}")
+                    print(f"⏳ Retrying in {retry_delay}s... ({attempt}/{max_retries})")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"❌ Database initialization failed after {max_retries} attempts")
+                    print(f"⚠️ Error: {e}")
+                    print("ℹ️ Falling back to file storage")
+                    break
+    else:
+        print("ℹ️ DATABASE_URL not set - using file storage")
+
+
+async def migrate_integrations_to_db():
+    """Migrate existing integrations from file storage to database"""
+    if not integrations_store:
+        return
+    
+    from database import get_db_session
+    
+    try:
+        with get_db_session() as db:
+            migrated = 0
+            for customer_id, integrations in integrations_store.items():
+                # Check if customer exists in DB
+                customer = db.query(Customer).filter(Customer.id == customer_id).first()
+                
+                # If not, create customer from integrations data
+                if not customer:
+                    github = integrations.get('github', {})
+                    repo = github.get('repo', f'{customer_id}-app')
+                    
+                    customer = Customer(
+                        id=customer_id,
+                        name=customer_id.replace('-', ' ').title(),
+                        stack='nodejs',  # Default, will be updated later
+                        github_repo=f"{github.get('org', 'unknown')}/{repo}"
+                    )
+                    db.add(customer)
+                    db.flush()
+                
+                # Migrate integrations
+                for integration_type, config in integrations.items():
+                    # Check if integration already exists
+                    existing = db.query(Integration).filter(
+                        Integration.customer_id == customer_id,
+                        Integration.type == integration_type
+                    ).first()
+                    
+                    if not existing:
+                        integration = Integration(
+                            customer_id=customer_id,
+                            type=integration_type,
+                            config=config
+                        )
+                        db.add(integration)
+                        migrated += 1
+            
+            db.commit()
+            print(f"✅ Migrated {migrated} integrations to database")
+    except Exception as e:
+        print(f"⚠️ Migration failed: {e}")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -229,11 +362,12 @@ def luffy_action(request: LuffyActionRequest):
 
 @app.get("/customers")
 def get_customers():
-    """Get all customer deployments with multi-environment support"""
+    """Get all customer deployments with multi-environment support - dynamically discovered"""
     if not k8s_available:
         return {'error': 'K8s not available', 'customers': [], 'total': 0}
     
     customers = []
+    customer_map = {}  # {customer_id: {metadata}}
     
     # Helper function to get environment status
     def get_env_status(customer_id, env):
@@ -246,85 +380,642 @@ def get_customers():
                 'environment': env,
                 'status': 'running' if running > 0 else 'error',
                 'pods': {'running': running, 'total': total},
-                'url': f'http://{customer_id}-{env}.local'
+                'url': f'http://{customer_id}-{env}.local' if env == 'prod' else f'http://{env}.{customer_id}.local'
             }
         except:
             return {
                 'environment': env,
                 'status': 'error',
                 'pods': {'running': 0, 'total': 0},
-                'url': f'http://{customer_id}-{env}.local'
+                'url': f'http://{customer_id}-{env}.local' if env == 'prod' else f'http://{env}.{customer_id}.local'
             }
     
-    # Acme Corp
-    acme_envs = [get_env_status('acme-corp', env) for env in ['dev', 'preprod', 'prod']]
-    customers.append({
-        'id': 'acme-corp',
-        'name': 'Acme Corp',
-        'app': 'acme-corp-api',
-        'stack': 'Node.js',
-        'environments': acme_envs,
-        'overallStatus': 'running' if any(e['status'] == 'running' for e in acme_envs) else 'error'
-    })
+    # Discover customer namespaces by scanning K8s
+    try:
+        all_namespaces = v1.list_namespace()
+        
+        for ns in all_namespaces.items:
+            ns_name = ns.metadata.name
+            labels = ns.metadata.labels or {}
+            
+            # Check if this is a customer namespace (has 'customer' label or matches pattern)
+            customer_id = None
+            env = None
+            
+            if 'customer' in labels and 'environment' in labels:
+                # Namespace created by OpenLuffy (has our labels)
+                customer_id = labels['customer']
+                env = labels['environment']
+            elif '-dev' in ns_name or '-preprod' in ns_name or '-prod' in ns_name:
+                # Legacy namespace (pattern-based: customer-id-env)
+                if ns_name.endswith('-dev'):
+                    customer_id = ns_name.replace('-dev', '')
+                    env = 'dev'
+                elif ns_name.endswith('-preprod'):
+                    customer_id = ns_name.replace('-preprod', '')
+                    env = 'preprod'
+                elif ns_name.endswith('-prod'):
+                    customer_id = ns_name.replace('-prod', '')
+                    env = 'prod'
+            
+            if customer_id and env:
+                if customer_id not in customer_map:
+                    # Try to get customer metadata from integrations or namespace labels
+                    customer_name = labels.get('customer-name', customer_id.replace('-', ' ').title())
+                    
+                    # Check if we have integration data for this customer
+                    github_config = integrations_store.get(customer_id, {}).get('github', {})
+                    repo_name = github_config.get('repo', f'{customer_id}-app')
+                    
+                    # Detect stack from repo or namespace labels
+                    stack = labels.get('stack', 'Unknown')
+                    if 'node' in repo_name or 'api' in repo_name:
+                        stack = 'Node.js'
+                    elif 'webapp' in repo_name or 'fastapi' in repo_name:
+                        stack = 'Python'
+                    elif 'go' in repo_name:
+                        stack = 'Go'
+                    
+                    customer_map[customer_id] = {
+                        'id': customer_id,
+                        'name': customer_name,
+                        'app': repo_name,
+                        'stack': stack,
+                        'environments': []
+                    }
     
-    # TechStart
-    techstart_envs = [get_env_status('techstart', env) for env in ['dev', 'preprod', 'prod']]
-    customers.append({
-        'id': 'techstart',
-        'name': 'TechStart Inc',
-        'app': 'techstart-webapp',
-        'stack': 'Python FastAPI',
-        'environments': techstart_envs,
-        'overallStatus': 'running' if any(e['status'] == 'running' for e in techstart_envs) else 'error'
-    })
+    except Exception as e:
+        print(f"Error discovering customer namespaces: {e}")
+        # Fall back to empty list - no customers found
+        return {'customers': [], 'total': 0}
     
-    # WidgetCo
-    widgetco_envs = [get_env_status('widgetco', env) for env in ['dev', 'preprod', 'prod']]
-    customers.append({
-        'id': 'widgetco',
-        'name': 'WidgetCo Manufacturing',
-        'app': 'widgetco-api',
-        'stack': 'Go',
-        'environments': widgetco_envs,
-        'overallStatus': 'running' if any(e['status'] == 'running' for e in widgetco_envs) else 'error'
-    })
+    # Build environment status for each discovered customer
+    for customer_id in customer_map:
+        envs = [get_env_status(customer_id, env) for env in ['dev', 'preprod', 'prod']]
+        customer_map[customer_id]['environments'] = envs
+        customer_map[customer_id]['overallStatus'] = 'running' if any(e['status'] == 'running' for e in envs) else 'error'
+    
+    customers = list(customer_map.values())
     
     return {'customers': customers, 'total': len(customers)}
 
+# Customer Integrations Management
+integrations_store = {}  # In-memory store: {customer_id: {integration_type: config}}
+
+@app.get("/customers/{customer_id}/integrations/{integration_type}")
+def get_customer_integration(customer_id: str, integration_type: str, db: Session = Depends(get_db)):
+    """Get integration config for a customer (database-first, with fallback)"""
+    
+    # Try database first (authoritative source)
+    if db_available:
+        try:
+            integration = db.query(Integration).filter(
+                Integration.customer_id == customer_id,
+                Integration.type == integration_type
+            ).first()
+            
+            if integration:
+                return integration.to_dict(mask_secrets=True)
+        except Exception as e:
+            print(f"Database query failed: {e}")
+    
+    # Fall back to in-memory store (backward compatibility)
+    if customer_id not in integrations_store:
+        return JSONResponse(status_code=404, content={'error': 'No integrations configured'})
+    
+    if integration_type not in integrations_store[customer_id]:
+        return JSONResponse(status_code=404, content={'error': f'{integration_type} not configured'})
+    
+    config = integrations_store[customer_id][integration_type].copy()
+    # Don't expose sensitive data in GET
+    if 'token' in config:
+        config['token'] = '***'
+    if 'password' in config:
+        config['password'] = '***'
+    
+    return config
+
+@app.post("/customers/{customer_id}/integrations/{integration_type}")
+async def save_customer_integration(customer_id: str, integration_type: str, request: Request, db: Session = Depends(get_db)):
+    """Save or update integration config for a customer (database-first)"""
+    try:
+        config = await request.json()
+        
+        # Save to database (authoritative)
+        if db_available:
+            try:
+                # Check if integration already exists
+                existing = db.query(Integration).filter(
+                    Integration.customer_id == customer_id,
+                    Integration.type == integration_type
+                ).first()
+                
+                if existing:
+                    # Update existing
+                    existing.config = config
+                    existing.updated_at = datetime.utcnow()
+                else:
+                    # Create new
+                    integration = Integration(
+                        customer_id=customer_id,
+                        type=integration_type,
+                        config=config
+                    )
+                    db.add(integration)
+                
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                print(f"Failed to save integration to database: {e}")
+        
+        # Also save to in-memory store (backward compatibility)
+        if customer_id not in integrations_store:
+            integrations_store[customer_id] = {}
+        
+        integrations_store[customer_id][integration_type] = config
+        save_integrations()  # Persist to disk
+        
+        return {'success': True, 'message': f'{integration_type} integration saved'}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={'error': str(e)})
+
+@app.delete("/customers/{customer_id}/integrations/{integration_type}")
+def delete_customer_integration(customer_id: str, integration_type: str, db: Session = Depends(get_db)):
+    """Remove integration config for a customer (database-first)"""
+    
+    # Delete from database (authoritative)
+    if db_available:
+        try:
+            integration = db.query(Integration).filter(
+                Integration.customer_id == customer_id,
+                Integration.type == integration_type
+            ).first()
+            
+            if integration:
+                db.delete(integration)
+                db.commit()
+            else:
+                # Not in database, check in-memory
+                if customer_id not in integrations_store or integration_type not in integrations_store[customer_id]:
+                    return JSONResponse(status_code=404, content={'error': f'{integration_type} not configured'})
+        except Exception as e:
+            db.rollback()
+            print(f"Failed to delete integration from database: {e}")
+    
+    # Also delete from in-memory store (backward compatibility)
+    if customer_id in integrations_store and integration_type in integrations_store[customer_id]:
+        del integrations_store[customer_id][integration_type]
+        
+        # Clean up empty customer dict
+        if not integrations_store[customer_id]:
+            del integrations_store[customer_id]
+        
+        save_integrations()  # Persist to disk
+    
+    return {'success': True, 'message': f'{integration_type} integration removed'}
+
+def initialize_customer_repo(customer_id: str, customer_name: str, stack: str, github: dict) -> dict:
+    """
+    Initialize a customer GitHub repo with CI/CD templates
+    
+    Args:
+        customer_id: Customer ID (e.g., 'acme-corp')
+        customer_name: Display name (e.g., 'Acme Corp')
+        stack: Tech stack (nodejs/python/golang)
+        github: GitHub config dict with org, repo, token, branch
+    
+    Returns:
+        dict with templates_pushed list and message
+    """
+    import requests
+    import base64
+    from pathlib import Path
+    
+    result = {'templates_pushed': [], 'message': '', 'errors': []}
+    
+    try:
+        templates_dir = Path(__file__).parent / 'templates'
+        
+        # Map stack to template files
+        stack_templates = {
+            'nodejs': {
+                '.github/workflows/ci.yaml': 'workflow-nodejs.yaml',
+                'Dockerfile': 'Dockerfile-nodejs',
+                'index.js': 'app-nodejs.js',
+                'package.json': 'package.json',
+                '.gitignore': 'gitignore',
+                'README.md': 'README.md',
+                'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                'k8s/service.yaml': 'k8s-service.yaml',
+            },
+            'python': {
+                '.github/workflows/ci.yaml': 'workflow-python.yaml',
+                'Dockerfile': 'Dockerfile-python',
+                'app.py': 'app-python.py',
+                'requirements.txt': 'requirements.txt',
+                '.gitignore': 'gitignore',
+                'README.md': 'README.md',
+                'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                'k8s/service.yaml': 'k8s-service.yaml',
+            },
+            'golang': {
+                '.github/workflows/ci.yaml': 'workflow-golang.yaml',
+                'Dockerfile': 'Dockerfile-golang',
+                'main.go': 'app-golang.go',
+                'go.mod': 'go.mod',
+                '.gitignore': 'gitignore',
+                'README.md': 'README.md',
+                'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                'k8s/service.yaml': 'k8s-service.yaml',
+            }
+        }
+        
+        # Stack-specific instructions for README
+        stack_instructions = {
+            'nodejs': '''```bash
+npm install
+npm start
+```
+
+Visit: http://localhost:3000''',
+            'python': '''```bash
+pip install -r requirements.txt
+python main.py
+```
+
+Visit: http://localhost:8000''',
+            'go': '''```bash
+go mod download
+go run main.go
+```
+
+Visit: http://localhost:8080'''
+        }
+        
+        if stack not in stack_templates:
+            result['errors'].append(f'Unknown stack: {stack}')
+            return result
+        
+        for target_path, template_file in stack_templates[stack].items():
+            template_path = templates_dir / template_file
+            
+            if not template_path.exists():
+                result['errors'].append(f'Template not found: {template_file}')
+                continue
+            
+            # Read template content
+            with open(template_path, 'r') as f:
+                content = f.read()
+            
+            # Replace placeholders
+            stack_info = {
+                'nodejs': {'framework': 'Express.js', 'port': '3000'},
+                'python': {'framework': 'FastAPI', 'port': '8000'},
+                'golang': {'framework': 'net/http', 'port': '8080'},
+            }
+            
+            info = stack_info.get(stack, {'framework': 'Unknown', 'port': '8000'})
+            
+            content = content.replace('{{CUSTOMER_ID}}', customer_id)
+            content = content.replace('{{CUSTOMER_NAME}}', customer_name)
+            content = content.replace('{{GITHUB_OWNER}}', github['org'])
+            content = content.replace('{{REPO_NAME}}', github['repo'])
+            content = content.replace('{{STACK}}', stack.title())
+            content = content.replace('{{FRAMEWORK}}', info['framework'])
+            content = content.replace('{{PORT}}', info['port'])
+            content = content.replace('{{APP_NAME}}', github['repo'])
+            content = content.replace('{{NAMESPACE}}', f"{customer_id}-dev")
+            content = content.replace('{{ENVIRONMENT}}', 'development')
+            content = content.replace('{{STACK_SETUP}}', stack_instructions.get(stack, ''))
+            
+            # Push file to GitHub using GitHub API
+            file_url = f"https://api.github.com/repos/{github['org']}/{github['repo']}/contents/{target_path}"
+            
+            # Check if file exists
+            check_response = requests.get(file_url, headers={
+                'Authorization': f"token {github['token']}",
+                'Accept': 'application/vnd.github.v3+json'
+            })
+            
+            file_data = {
+                'message': f'Add {target_path} via OpenLuffy',
+                'content': base64.b64encode(content.encode()).decode(),
+                'branch': github.get('branch', 'main')
+            }
+            
+            if check_response.status_code == 200:
+                # File exists, update it
+                existing_file = check_response.json()
+                file_data['sha'] = existing_file['sha']
+            
+            # Create or update file
+            push_response = requests.put(file_url, json=file_data, headers={
+                'Authorization': f"token {github['token']}",
+                'Accept': 'application/vnd.github.v3+json'
+            })
+            
+            if push_response.ok:
+                result['templates_pushed'].append(target_path)
+            else:
+                result['errors'].append(f'Failed to push {target_path}: {push_response.status_code}')
+        
+        result['message'] = f'Repository initialized with {len(result["templates_pushed"])} files'
+        
+    except Exception as e:
+        result['errors'].append(f'Exception: {str(e)}')
+    
+    return result
+
+@app.post("/customers/create")
+async def create_customer(request: Request):
+    """
+    Create a new customer with GitHub repo and ArgoCD applications
+    
+    Expects:
+    {
+        "name": "Acme Corp",
+        "id": "acme-corp",
+        "stack": "nodejs",
+        "github": {
+            "org": "lebrick07",
+            "repo": "acme-corp-api",
+            "token": "ghp_xxx",
+            "branch": "main"
+        },
+        "argocd": {
+            "url": "http://argocd.local",
+            "token": "xxx"
+        }
+    }
+    """
+    try:
+        data = await request.json()
+        
+        customer_name = data.get('name')
+        customer_id = data.get('id')
+        stack = data.get('stack', 'nodejs')
+        github = data.get('github', {})
+        argocd = data.get('argocd', {})
+        
+        if not customer_name or not customer_id:
+            return JSONResponse(status_code=400, content={'error': 'Customer name and ID are required'})
+        
+        if not github.get('org') or not github.get('repo') or not github.get('token'):
+            return JSONResponse(status_code=400, content={'error': 'GitHub integration is required'})
+        
+        if not argocd.get('url') or not argocd.get('token'):
+            return JSONResponse(status_code=400, content={'error': 'ArgoCD integration is required'})
+        
+        result = {
+            'success': True,
+            'customer_id': customer_id,
+            'customer_name': customer_name,
+            'github': {},
+            'k8s': {},
+            'argocd': {}
+        }
+        
+        # Step 1: Check if GitHub repo exists
+        import requests
+        
+        repo_url = f"https://api.github.com/repos/{github['org']}/{github['repo']}"
+        repo_response = requests.get(repo_url, headers={
+            'Authorization': f"token {github['token']}",
+            'Accept': 'application/vnd.github.v3+json'
+        })
+        
+        if repo_response.status_code == 200:
+            # Repo exists, use it
+            result['github']['action'] = 'existing'
+            result['github']['url'] = f"https://github.com/{github['org']}/{github['repo']}"
+            result['github']['message'] = 'Using existing repository'
+        elif repo_response.status_code == 404:
+            # Repo doesn't exist, create it
+            create_repo_url = f"https://api.github.com/user/repos"
+            create_data = {
+                'name': github['repo'],
+                'description': f"Customer application - {customer_name}",
+                'private': False,
+                'auto_init': True
+            }
+            
+            create_response = requests.post(create_repo_url, json=create_data, headers={
+                'Authorization': f"token {github['token']}",
+                'Accept': 'application/vnd.github.v3+json'
+            })
+            
+            if not create_response.ok:
+                return JSONResponse(status_code=400, content={
+                    'error': f'Failed to create GitHub repository: {create_response.json().get("message", "Unknown error")}'
+                })
+            
+            result['github']['action'] = 'created'
+            result['github']['url'] = f"https://github.com/{github['org']}/{github['repo']}"
+            result['github']['message'] = 'Repository created from template'
+        else:
+            return JSONResponse(status_code=400, content={
+                'error': f'Failed to check GitHub repository: {repo_response.status_code}'
+            })
+        
+        # Step 2: Store integrations
+        if customer_id not in integrations_store:
+            integrations_store[customer_id] = {}
+        
+        integrations_store[customer_id]['github'] = github
+        integrations_store[customer_id]['argocd'] = argocd
+        save_integrations()  # Persist to disk
+        
+        # Step 3: Create K8s namespaces (if k8s available)
+        namespaces_created = []
+        if k8s_available:
+            try:
+                for env in ['dev', 'preprod', 'prod']:
+                    namespace_name = f"{customer_id}-{env}"
+                    try:
+                        from kubernetes.client import V1Namespace, V1ObjectMeta
+                        namespace = V1Namespace(
+                            metadata=V1ObjectMeta(
+                                name=namespace_name,
+                                labels={
+                                    'customer': customer_id,
+                                    'customer-name': customer_name,
+                                    'environment': env,
+                                    'stack': stack,
+                                    'managed-by': 'openluffy'
+                                }
+                            )
+                        )
+                        v1.create_namespace(namespace)
+                        namespaces_created.append(namespace_name)
+                    except Exception as ns_error:
+                        if '409' in str(ns_error):  # Already exists
+                            namespaces_created.append(namespace_name)
+                        else:
+                            print(f"Failed to create namespace {namespace_name}: {ns_error}")
+                
+                result['k8s']['namespaces'] = namespaces_created
+            except Exception as k8s_error:
+                print(f"K8s namespace creation error: {k8s_error}")
+                result['k8s']['error'] = str(k8s_error)
+        
+        # Step 4: Create ArgoCD applications (placeholder - would need ArgoCD API)
+        result['argocd']['applications'] = [
+            f"{customer_id}-dev",
+            f"{customer_id}-preprod",
+            f"{customer_id}-prod"
+        ]
+        result['argocd']['message'] = 'ArgoCD applications configured (manual sync required)'
+        
+        # Step 5: Push CI/CD templates to GitHub repo
+        template_result = initialize_customer_repo(customer_id, customer_name, stack, github)
+        result['github'].update(template_result)
+        
+        return result
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={'error': str(e)})
+
+@app.post("/customers/{customer_id}/reinitialize")
+async def reinitialize_customer_repo(customer_id: str, request: Request):
+    """
+    Reinitialize a customer's GitHub repository with CI/CD templates
+    
+    Useful for:
+    - Fixing failed initial template push
+    - Updating templates after changes
+    - Re-applying templates to existing repos
+    
+    Expects (optional):
+    {
+        "stack": "nodejs"  // Override stack detection
+    }
+    """
+    try:
+        data = await request.json() if request.headers.get('content-type') == 'application/json' else {}
+        
+        # Get customer integrations
+        github_config = None
+        stack_override = data.get('stack')
+        
+        # Try database first
+        if db_available:
+            try:
+                github_integration = db.query(Integration).filter(
+                    Integration.customer_id == customer_id,
+                    Integration.type == 'github'
+                ).first()
+                
+                if github_integration:
+                    github_config = github_integration.config
+            except Exception as e:
+                print(f"Database query failed: {e}")
+        
+        # Fall back to in-memory store
+        if not github_config and customer_id in integrations_store:
+            github_config = integrations_store[customer_id].get('github')
+        
+        if not github_config:
+            return JSONResponse(status_code=404, content={
+                'error': 'GitHub integration not configured for this customer'
+            })
+        
+        # Detect stack if not overridden
+        stack = stack_override
+        if not stack:
+            repo_name = github_config.get('repo', '')
+            if 'node' in repo_name or 'api' in repo_name or 'express' in repo_name:
+                stack = 'nodejs'
+            elif 'py' in repo_name or 'fastapi' in repo_name or 'django' in repo_name:
+                stack = 'python'
+            elif 'go' in repo_name or 'golang' in repo_name:
+                stack = 'golang'
+            else:
+                stack = 'nodejs'  # Default
+        
+        # Get customer name (try to find it)
+        customer_name = customer_id.replace('-', ' ').title()
+        
+        # Reinitialize repository
+        result = initialize_customer_repo(
+            customer_id=customer_id,
+            customer_name=customer_name,
+            stack=stack,
+            github=github_config
+        )
+        
+        return {
+            'success': len(result['errors']) == 0,
+            'customer_id': customer_id,
+            'stack': stack,
+            **result
+        }
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={'error': str(e)})
+
 @app.get("/deployments")
 def get_deployments():
-    """Get all deployments across all customer namespaces and environments"""
+    """Get all deployments across all customer namespaces and environments - dynamically discovered"""
     if not k8s_available:
         return {'error': 'K8s not available', 'deployments': [], 'total': 0}
     
     deployments = []
-    customers = ['acme-corp', 'techstart', 'widgetco']
-    environments = ['dev', 'preprod', 'prod']
     
-    for customer in customers:
-        for env in environments:
-            ns = f"{customer}-{env}"
-            try:
-                deploys = apps_v1.list_namespaced_deployment(ns)
-                
-                for deploy in deploys.items:
-                    name = deploy.metadata.name
-                    replicas = deploy.status.replicas or 0
-                    ready = deploy.status.ready_replicas or 0
+    # Discover all customer namespaces dynamically
+    try:
+        all_namespaces = v1.list_namespace()
+        
+        for ns_obj in all_namespaces.items:
+            ns_name = ns_obj.metadata.name
+            labels = ns_obj.metadata.labels or {}
+            
+            # Check if this is a customer namespace
+            customer_id = None
+            env = None
+            
+            if 'customer' in labels and 'environment' in labels:
+                # Namespace created by OpenLuffy (has our labels)
+                customer_id = labels['customer']
+                env = labels['environment']
+            elif '-dev' in ns_name or '-preprod' in ns_name or '-prod' in ns_name:
+                # Legacy namespace (pattern-based: customer-id-env)
+                if ns_name.endswith('-dev'):
+                    customer_id = ns_name.replace('-dev', '')
+                    env = 'dev'
+                elif ns_name.endswith('-preprod'):
+                    customer_id = ns_name.replace('-preprod', '')
+                    env = 'preprod'
+                elif ns_name.endswith('-prod'):
+                    customer_id = ns_name.replace('-prod', '')
+                    env = 'prod'
+            
+            if customer_id and env:
+                # Get deployments from this namespace
+                try:
+                    deploys = apps_v1.list_namespaced_deployment(ns_name)
                     
-                    deployments.append({
-                        'id': f"{ns}-{name}",
-                        'name': name,
-                        'namespace': ns,
-                        'customer': customer,
-                        'environment': env,
-                        'replicas': replicas,
-                        'ready': ready,
-                        'status': 'running' if ready == replicas and ready > 0 else 'degraded',
-                        'image': deploy.spec.template.spec.containers[0].image
-                    })
-            except ApiException:
-                pass
+                    for deploy in deploys.items:
+                        name = deploy.metadata.name
+                        replicas = deploy.status.replicas or 0
+                        ready = deploy.status.ready_replicas or 0
+                        
+                        deployments.append({
+                            'id': f"{ns_name}-{name}",
+                            'name': name,
+                            'namespace': ns_name,
+                            'customer': customer_id,
+                            'environment': env,
+                            'replicas': replicas,
+                            'ready': ready,
+                            'status': 'running' if ready == replicas and ready > 0 else 'degraded',
+                            'image': deploy.spec.template.spec.containers[0].image
+                        })
+                except ApiException as e:
+                    # Namespace exists but no deployments or access denied
+                    pass
+    
+    except Exception as e:
+        print(f"Error discovering deployments: {e}")
     
     return {'deployments': deployments, 'total': len(deployments)}
 

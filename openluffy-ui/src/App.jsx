@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './App.css'
-import { CustomerProvider } from './contexts/CustomerContext'
+import { CustomerProvider, useCustomer } from './contexts/CustomerContext'
 import TopNavbar from './components/TopNavbar'
 import Sidebar from './components/Sidebar'
 import ApplicationsTable from './components/ApplicationsTable'
@@ -9,10 +9,11 @@ import IntegrationsDashboard from './components/IntegrationsDashboard'
 import K8sInsights from './components/K8sInsights'
 import PipelinesView from './components/PipelinesView'
 import PipelineConfig from './components/PipelineConfig'
-import CreateCustomerModal from './components/CreateCustomerModal'
+import CreateCustomerWizard from './components/CreateCustomerWizard'
 import AIChatPanel from './components/AIChatPanel'
 
-function App() {
+function AppContent() {
+  const { refreshCustomers } = useCustomer()
   const [activeView, setActiveView] = useState('applications')
   const [selectedEnvironment, setSelectedEnvironment] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(null) // null | 'customer' | 'application' | 'pipeline' | 'integration'
@@ -27,6 +28,8 @@ function App() {
 
   const handleCreated = () => {
     setShowCreateModal(null)
+    // Refresh customer list after creation
+    refreshCustomers()
   }
 
   const toggleSidebar = () => {
@@ -116,7 +119,6 @@ function App() {
   }
 
   return (
-    <CustomerProvider>
       <div 
         className="app operator-grade" 
         onMouseMove={handleMouseMove}
@@ -172,7 +174,7 @@ function App() {
                   <button className="chat-expand-btn">▲ Expand</button>
                 </div>
               ) : (
-                <AIChatPanel isOpen={true} onCollapse={() => setChatCollapsed(true)} />
+                <AIChatPanel onCollapse={() => setChatCollapsed(true)} />
               )}
             </div>
           </div>
@@ -180,9 +182,9 @@ function App() {
 
         {/* Create Modals */}
         {showCreateModal === 'customer' && (
-          <CreateCustomerModal
+          <CreateCustomerWizard
             onClose={() => setShowCreateModal(null)}
-            onCustomerCreated={handleCreated}
+            onSuccess={handleCreated}
           />
         )}
 
@@ -228,6 +230,13 @@ function App() {
           </div>
         )}
       </div>
+  )
+}
+
+function App() {
+  return (
+    <CustomerProvider>
+      <AppContent />
     </CustomerProvider>
   )
 }
