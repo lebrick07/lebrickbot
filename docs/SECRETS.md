@@ -37,19 +37,31 @@ The runner allows workflows to access kubectl and create K8s secrets automatical
 
 ### 3. Deploy
 
-**Secrets are created automatically by release pipelines!**
+**Secrets are created automatically via ArgoCD + Helm!**
 
 When you merge to `develop`:
-- Release-Dev workflow runs
-- Creates `openluffy-dev-api-keys` in `openluffy-dev` namespace
-- Creates `openluffy-preprod-api-keys` in `openluffy-preprod` namespace
-- Uses `${{ secrets.ANTHROPIC_API_KEY }}` from GitHub
+1. Release-Dev workflow patches ArgoCD Applications
+2. Injects `secrets.claudeApiKey` as Helm parameter
+3. ArgoCD syncs and passes parameter to Helm
+4. Helm creates Secret from template
+5. Secrets created in `openluffy-dev` and `openluffy-preprod` namespaces
 
 When you merge to `main`:
-- Release-Prod workflow runs
-- Creates `openluffy-prod-api-keys` in `openluffy-prod` namespace
+1. Release-Prod workflow patches ArgoCD Application
+2. Helm creates Secret in `openluffy-prod` namespace
 
-**No manual kubectl commands needed!**
+**The Helm chart manages the Secret resource:**
+```yaml
+# helm/openluffy/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-api-keys
+stringData:
+  claude-api-key: {{ .Values.secrets.claudeApiKey }}
+```
+
+**No manual kubectl commands needed - pure GitOps!**
 
 ---
 

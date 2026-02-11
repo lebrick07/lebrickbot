@@ -78,18 +78,32 @@ This ensures they run on the Pi where kubectl works.
 ## How It Works
 
 **Release-Dev Workflow:**
-1. Runs on self-hosted runner (Pi)
-2. Builds Docker images (multi-arch)
-3. Pushes to ghcr.io
-4. **Creates K8s secret** using `${{ secrets.ANTHROPIC_API_KEY }}`
-5. Updates Helm values
-6. Commits changes
-7. ArgoCD syncs automatically
+1. Build job: Runs on cloud runners
+   - Builds Docker images (multi-arch)
+   - Pushes to ghcr.io
+2. Inject-secrets job: Runs on self-hosted runner (Pi)
+   - **Patches ArgoCD Applications** with secret as Helm parameter
+   - Triggers ArgoCD sync
+3. Promote job: Updates preprod manifests
 
 **Release-Prod Workflow:**
 - Same flow, but for production
 
-**Secrets are created automatically** - no manual kubectl needed!
+**How secrets work:**
+1. Workflow patches ArgoCD Application spec:
+   ```yaml
+   spec:
+     source:
+       helm:
+         parameters:
+           - name: secrets.claudeApiKey
+             value: ${{ secrets.ANTHROPIC_API_KEY }}
+   ```
+2. ArgoCD passes parameter to Helm
+3. Helm renders Secret from template
+4. Secret created in namespace
+
+**No manual kubectl needed - fully automated via ArgoCD!**
 
 ---
 

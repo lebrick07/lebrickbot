@@ -93,26 +93,37 @@ jobs:
           git commit -m "chore(prod): update image tags to main-${SHORT_SHA} [skip ci]" || echo "No changes"
           git push
 
-  # Create/update K8s secrets
-  create-secrets:
-    name: Create K8s Secrets
+  # Inject secrets into ArgoCD Application
+  inject-secrets:
+    name: Inject Secrets to ArgoCD
     runs-on: self-hosted
     needs: [build-and-push]
     
     steps:
-      - name: Create prod secret
+      - name: Update ArgoCD Application with secret parameter
         run: |
-          kubectl create secret generic openluffy-prod-api-keys \
-            --from-literal=claude-api-key="${{ secrets.ANTHROPIC_API_KEY }}" \
-            -n openluffy-prod \
-            --dry-run=client -o yaml | kubectl apply -f -
-          echo "✅ Production secret created/updated"
+          # Update openluffy-prod Application
+          cat > /tmp/prod-patch.yaml << 'EOF'
+          spec:
+            source:
+              helm:
+                parameters:
+                  - name: secrets.claudeApiKey
+                    value: "${{ secrets.ANTHROPIC_API_KEY }}"
+          EOF
+          
+          kubectl patch application openluffy-prod -n argocd --type merge --patch-file /tmp/prod-patch.yaml
+          echo "✅ Prod application patched with secret"
+          
+          # Trigger ArgoCD sync
+          kubectl patch application openluffy-prod -n argocd -p '{"operation":{"sync":{}}}' --type merge
+          echo "✅ ArgoCD sync triggered"
 
   # Production deployment complete
   release-complete:
     name: Production Release Complete
     runs-on: ubuntu-latest
-    needs: [build-and-push, create-secrets]
+    needs: [build-and-push, inject-secrets]
     steps:
       - name: Summary
         run: |
