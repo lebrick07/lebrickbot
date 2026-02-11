@@ -11,6 +11,7 @@ import PipelineConfig from './components/PipelineConfig'
 import CreateCustomerWizard from './components/CreateCustomerWizard'
 import AIChatPanel from './components/AIChatPanel'
 import SettingsPage from './components/SettingsPage'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function AppContent() {
   const { refreshCustomers } = useCustomer()
@@ -222,9 +223,11 @@ function AppContent() {
 
 function App() {
   return (
-    <CustomerProvider>
-      <AppContent />
-    </CustomerProvider>
+    <ErrorBoundary>
+      <CustomerProvider>
+        <AppContent />
+      </CustomerProvider>
+    </ErrorBoundary>
   )
 }
 
