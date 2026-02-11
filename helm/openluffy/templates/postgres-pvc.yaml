@@ -1,0 +1,18 @@
+{{- if .Values.postgres.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openluffy.fullname" . }}-postgres
+  labels:
+    {{- include "openluffy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage.size }}
+  {{- if .Values.postgres.storage.storageClass }}
+  storageClassName: {{ .Values.postgres.storage.storageClass }}
+  {{- end }}
+{{- end }}
