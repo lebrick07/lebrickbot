@@ -93,11 +93,26 @@ jobs:
           git commit -m "chore(prod): update image tags to main-${SHORT_SHA} [skip ci]" || echo "No changes"
           git push
 
+  # Create/update K8s secrets
+  create-secrets:
+    name: Create K8s Secrets
+    runs-on: self-hosted
+    needs: [build-and-push]
+    
+    steps:
+      - name: Create prod secret
+        run: |
+          kubectl create secret generic openluffy-prod-api-keys \
+            --from-literal=claude-api-key="${{ secrets.ANTHROPIC_API_KEY }}" \
+            -n openluffy-prod \
+            --dry-run=client -o yaml | kubectl apply -f -
+          echo "✅ Production secret created/updated"
+
   # Production deployment complete
   release-complete:
     name: Production Release Complete
     runs-on: ubuntu-latest
-    needs: [build-and-push]
+    needs: [build-and-push, create-secrets]
     steps:
       - name: Summary
         run: |

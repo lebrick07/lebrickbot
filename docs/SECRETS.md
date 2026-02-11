@@ -5,11 +5,14 @@
 OpenLuffy requires API keys for external services:
 - **Anthropic Claude API** - For intelligent AI agent
 
-These secrets are stored in Kubernetes and referenced by deployments.
+These secrets are:
+1. Stored in GitHub Secrets (encrypted)
+2. Automatically created in K8s by release pipelines
+3. Referenced by deployments as environment variables
 
 ---
 
-## Setup Process
+## Setup Process (One Time)
 
 ### 1. Add Secret to GitHub
 
@@ -20,33 +23,33 @@ These secrets are stored in Kubernetes and referenced by deployments.
 **Name:** `ANTHROPIC_API_KEY`
 **Value:** `sk-ant-api03-...` (your Claude API key)
 
-This allows the key to be used in GitHub Actions workflows (future automation).
+---
+
+### 2. Set Up Self-Hosted Runner
+
+**Required for automation to work:**
+
+See: [docs/GITHUB_RUNNER.md](./GITHUB_RUNNER.md)
+
+The runner allows workflows to access kubectl and create K8s secrets automatically.
 
 ---
 
-### 2. Create K8s Secrets
+### 3. Deploy
 
-**On the Pi (where kubectl is configured):**
+**Secrets are created automatically by release pipelines!**
 
-```bash
-# Export your API key
-export ANTHROPIC_API_KEY=sk-ant-api03-...
+When you merge to `develop`:
+- Release-Dev workflow runs
+- Creates `openluffy-dev-api-keys` in `openluffy-dev` namespace
+- Creates `openluffy-preprod-api-keys` in `openluffy-preprod` namespace
+- Uses `${{ secrets.ANTHROPIC_API_KEY }}` from GitHub
 
-# Create secrets in all environments
-cd ~/projects/openluffy
-chmod +x scripts/create-secrets.sh
-./scripts/create-secrets.sh all
+When you merge to `main`:
+- Release-Prod workflow runs
+- Creates `openluffy-prod-api-keys` in `openluffy-prod` namespace
 
-# Or create for specific environment
-./scripts/create-secrets.sh dev
-./scripts/create-secrets.sh preprod
-./scripts/create-secrets.sh prod
-```
-
-This creates:
-- `openluffy-dev-api-keys` in `openluffy-dev` namespace
-- `openluffy-preprod-api-keys` in `openluffy-preprod` namespace
-- `openluffy-prod-api-keys` in `openluffy-prod` namespace
+**No manual kubectl commands needed!**
 
 ---
 
