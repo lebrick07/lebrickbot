@@ -199,6 +199,100 @@ def get_tools() -> List[Dict[str, Any]]:
                 "properties": {},
                 "required": []
             }
+        },
+        {
+            "name": "list_customers",
+            "description": "List all customers in OpenLuffy platform. Returns customer ID, name, stack, and creation time. Useful for understanding who you're managing.",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "get_customer_details",
+            "description": "Get detailed information about a specific customer including their GitHub repo, ArgoCD applications, and deployment status across environments.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "customer_id": {
+                        "type": "string",
+                        "description": "Customer ID (e.g., 'acme-corp', 'techstart')"
+                    }
+                },
+                "required": ["customer_id"]
+            }
+        },
+        {
+            "name": "get_platform_health",
+            "description": "Get overall OpenLuffy platform health including customer count, total deployments, ArgoCD status, and any issues.",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "create_customer",
+            "description": "Create a new customer in OpenLuffy with GitHub repo and ArgoCD applications. This will create the customer record, GitHub repo (if needed), push CI/CD templates, create K8s namespaces, and set up ArgoCD applications for dev, preprod, and prod environments.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Customer display name (e.g., 'Acme Corp')"
+                    },
+                    "id": {
+                        "type": "string",
+                        "description": "Customer ID slug (e.g., 'acme-corp'). Must be lowercase with hyphens."
+                    },
+                    "stack": {
+                        "type": "string",
+                        "description": "Tech stack: 'nodejs', 'python', or 'golang'",
+                        "enum": ["nodejs", "python", "golang"]
+                    },
+                    "github_org": {
+                        "type": "string",
+                        "description": "GitHub organization or username (e.g., 'lebrick07')"
+                    },
+                    "github_repo": {
+                        "type": "string",
+                        "description": "GitHub repository name (e.g., 'acme-corp-api')"
+                    },
+                    "github_token": {
+                        "type": "string",
+                        "description": "GitHub personal access token with repo permissions"
+                    },
+                    "argocd_url": {
+                        "type": "string",
+                        "description": "ArgoCD URL (e.g., 'http://argocd.local')"
+                    },
+                    "argocd_token": {
+                        "type": "string",
+                        "description": "ArgoCD API token"
+                    }
+                },
+                "required": ["name", "id", "stack", "github_org", "github_repo", "github_token", "argocd_url", "argocd_token"]
+            }
+        },
+        {
+            "name": "delete_customer",
+            "description": "Delete a customer and destroy all their environments. This will delete ArgoCD applications, K8s namespaces, archive the GitHub repo, remove integrations, and delete the customer record. Use with caution!",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "customer_id": {
+                        "type": "string",
+                        "description": "Customer ID to delete (e.g., 'acme-corp')"
+                    },
+                    "delete_repo": {
+                        "type": "boolean",
+                        "description": "If true, permanently delete the GitHub repo. If false (default), archive it instead.",
+                        "default": False
+                    }
+                },
+                "required": ["customer_id"]
+            }
         }
     ]
 
@@ -261,6 +355,24 @@ async def execute_tool(tool_name: str, tool_input: Dict[str, Any]) -> Dict[str, 
     
     elif tool_name == "list_namespaces":
         return await list_namespaces()
+    
+    elif tool_name == "list_customers":
+        return await list_customers()
+    
+    elif tool_name == "get_customer_details":
+        return await get_customer_details(tool_input["customer_id"])
+    
+    elif tool_name == "get_platform_health":
+        return await get_platform_health()
+    
+    elif tool_name == "create_customer":
+        return await create_customer(tool_input)
+    
+    elif tool_name == "delete_customer":
+        return await delete_customer(
+            tool_input["customer_id"],
+            tool_input.get("delete_repo", False)
+        )
     
     else:
         return {"error": f"Unknown tool: {tool_name}"}
@@ -553,3 +665,294 @@ async def list_namespaces() -> Dict[str, Any]:
     
     except ApiException as e:
         return {"error": f"Failed to list namespaces: {e.reason}"}
+
+
+async def list_customers() -> Dict[str, Any]:
+    """List all customers in OpenLuffy"""
+    try:
+        # Import here to avoid circular dependencies
+        from database import SessionLocal, Customer
+        
+        db = SessionLocal()
+        try:
+            customers = db.query(Customer).all()
+            
+            customer_list = []
+            for customer in customers:
+                customer_list.append({
+                    "id": customer.id,
+                    "name": customer.name,
+                    "stack": customer.stack,
+                    "created_at": str(customer.created_at)
+                })
+            
+            return {
+                "count": len(customer_list),
+                "customers": customer_list
+            }
+        finally:
+            db.close()
+    
+    except Exception as e:
+        return {"error": f"Failed to list customers: {str(e)}"}
+
+
+async def get_customer_details(customer_id: str) -> Dict[str, Any]:
+    """Get detailed information about a specific customer"""
+    try:
+        # Import here to avoid circular dependencies
+        from database import SessionLocal, Customer, Integration
+        
+        db = SessionLocal()
+        try:
+            # Get customer
+            customer = db.query(Customer).filter(Customer.id == customer_id).first()
+            if not customer:
+                return {"error": f"Customer '{customer_id}' not found"}
+            
+            # Get integrations
+            integrations = db.query(Integration).filter(Integration.customer_id == customer_id).all()
+            
+            integration_data = {}
+            for integration in integrations:
+                integration_data[integration.type] = integration.config
+            
+            # Get ArgoCD application status
+            custom_api = client.CustomObjectsApi()
+            argocd_apps = []
+            
+            for env in ['dev', 'preprod', 'prod']:
+                app_name = f"{customer_id}-{env}"
+                try:
+                    app = custom_api.get_namespaced_custom_object(
+                        group='argoproj.io',
+                        version='v1alpha1',
+                        namespace='argocd',
+                        plural='applications',
+                        name=app_name
+                    )
+                    
+                    argocd_apps.append({
+                        "name": app_name,
+                        "environment": env,
+                        "sync_status": app.get('status', {}).get('sync', {}).get('status'),
+                        "health_status": app.get('status', {}).get('health', {}).get('status'),
+                        "repo": app.get('spec', {}).get('source', {}).get('repoURL')
+                    })
+                except:
+                    argocd_apps.append({
+                        "name": app_name,
+                        "environment": env,
+                        "status": "not_found"
+                    })
+            
+            # Get deployment status
+            deployments = []
+            for env in ['dev', 'preprod', 'prod']:
+                namespace = f"{customer_id}-{env}"
+                try:
+                    deploys = apps_v1.list_namespaced_deployment(namespace)
+                    for deploy in deploys.items:
+                        deployments.append({
+                            "name": deploy.metadata.name,
+                            "environment": env,
+                            "replicas": {
+                                "desired": deploy.spec.replicas,
+                                "ready": deploy.status.ready_replicas or 0,
+                                "available": deploy.status.available_replicas or 0
+                            }
+                        })
+                except:
+                    pass
+            
+            return {
+                "customer": {
+                    "id": customer.id,
+                    "name": customer.name,
+                    "stack": customer.stack,
+                    "created_at": str(customer.created_at)
+                },
+                "integrations": integration_data,
+                "argocd_applications": argocd_apps,
+                "deployments": deployments
+            }
+        
+        finally:
+            db.close()
+    
+    except Exception as e:
+        return {"error": f"Failed to get customer details: {str(e)}"}
+
+
+async def get_platform_health() -> Dict[str, Any]:
+    """Get overall OpenLuffy platform health"""
+    try:
+        # Import here to avoid circular dependencies
+        from database import SessionLocal, Customer
+        
+        db = SessionLocal()
+        try:
+            # Count customers
+            customer_count = db.query(Customer).count()
+            
+            # Get ArgoCD applications
+            custom_api = client.CustomObjectsApi()
+            argocd_apps = custom_api.list_namespaced_custom_object(
+                group='argoproj.io',
+                version='v1alpha1',
+                namespace='argocd',
+                plural='applications'
+            )
+            
+            apps_total = len(argocd_apps.get('items', []))
+            apps_synced = 0
+            apps_healthy = 0
+            apps_degraded = 0
+            
+            for app in argocd_apps.get('items', []):
+                sync_status = app.get('status', {}).get('sync', {}).get('status')
+                health_status = app.get('status', {}).get('health', {}).get('status')
+                
+                if sync_status == 'Synced':
+                    apps_synced += 1
+                if health_status == 'Healthy':
+                    apps_healthy += 1
+                elif health_status == 'Degraded':
+                    apps_degraded += 1
+            
+            # Get overall pod count
+            all_pods = v1.list_pod_for_all_namespaces()
+            pods_running = sum(1 for p in all_pods.items if p.status.phase == 'Running')
+            pods_total = len(all_pods.items)
+            
+            # Check for issues
+            issues = []
+            if apps_degraded > 0:
+                issues.append(f"{apps_degraded} ArgoCD applications are degraded")
+            if apps_synced < apps_total:
+                issues.append(f"{apps_total - apps_synced} ArgoCD applications are out of sync")
+            if pods_running < pods_total:
+                issues.append(f"{pods_total - pods_running} pods are not running")
+            
+            return {
+                "status": "healthy" if len(issues) == 0 else "degraded",
+                "customers": {
+                    "total": customer_count
+                },
+                "argocd": {
+                    "total": apps_total,
+                    "synced": apps_synced,
+                    "healthy": apps_healthy,
+                    "degraded": apps_degraded
+                },
+                "pods": {
+                    "total": pods_total,
+                    "running": pods_running
+                },
+                "issues": issues
+            }
+        
+        finally:
+            db.close()
+    
+    except Exception as e:
+        return {"error": f"Failed to get platform health: {str(e)}"}
+
+
+async def create_customer(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new customer via backend API"""
+    try:
+        import httpx
+        
+        # Call the backend create customer endpoint
+        payload = {
+            "name": params["name"],
+            "id": params["id"],
+            "stack": params["stack"],
+            "github": {
+                "org": params["github_org"],
+                "repo": params["github_repo"],
+                "token": params["github_token"],
+                "branch": "main"
+            },
+            "argocd": {
+                "url": params["argocd_url"],
+                "token": params["argocd_token"]
+            }
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://localhost:8000/customers/create",
+                json=payload,
+                timeout=60.0
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return {
+                    "success": True,
+                    "message": f"Customer '{params['name']}' created successfully",
+                    "customer_id": params["id"],
+                    "details": result
+                }
+            else:
+                error_data = response.json()
+                return {
+                    "success": False,
+                    "error": error_data.get("error", "Unknown error")
+                }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to create customer: {str(e)}"
+        }
+
+
+async def delete_customer(customer_id: str, delete_repo: bool = False) -> Dict[str, Any]:
+    """Delete a customer via backend API"""
+    try:
+        import httpx
+        
+        # Call the backend delete customer endpoint
+        params = {
+            "confirm": customer_id,
+            "delete_repo": "true" if delete_repo else "false"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"http://localhost:8000/customers/{customer_id}",
+                params=params,
+                timeout=60.0
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                if result.get("success"):
+                    return {
+                        "success": True,
+                        "message": f"Customer '{customer_id}' deleted successfully",
+                        "deleted": result.get("deleted", {}),
+                        "errors": result.get("errors", [])
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "Deletion completed with errors",
+                        "errors": result.get("errors", [])
+                    }
+            else:
+                error_data = response.json()
+                return {
+                    "success": False,
+                    "error": error_data.get("error", "Unknown error")
+                }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to delete customer: {str(e)}"
+        }
