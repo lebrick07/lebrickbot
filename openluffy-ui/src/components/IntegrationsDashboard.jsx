@@ -72,7 +72,7 @@ const availableIntegrations = [
         label: 'Personal Access Token', 
         type: 'password', 
         required: true,
-        helpText: 'Token needs: repo, workflow, read:org scopes'
+        helpText: 'GitHub token with repo, workflow, read:org scopes. Used to access this customer\'s repository for CI/CD automation.'
       },
       {
         name: 'branch',
@@ -87,12 +87,15 @@ const availableIntegrations = [
       title: 'How to Generate a GitHub Token',
       steps: [
         'Click "Generate Token" below to open GitHub',
-        'Confirm the scopes: repo, workflow, read:org',
-        'Click "Generate token" at the bottom',
-        'Copy the token and paste it above',
-        'Click "Test Connection" to verify'
+        'Confirm the required scopes are selected: repo, workflow, read:org',
+        'Set an expiration date (recommend 90 days or No expiration)',
+        'Click "Generate token" at the bottom of the page',
+        'Copy the token immediately (you won\'t be able to see it again)',
+        'Paste the token in the "Personal Access Token" field above',
+        'Fill in the Repository Owner and Repository Name',
+        'Click "Test Connection" to verify access'
       ],
-      tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,workflow,read:org&description=OpenLuffy+Integration'
+      tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,workflow,read:org&description=OpenLuffy+Customer+Integration'
     }
   },
   {
