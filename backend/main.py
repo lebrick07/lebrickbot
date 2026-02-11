@@ -931,7 +931,6 @@ async def create_customer(request: Request):
                                 name=namespace_name,
                                 labels={
                                     'customer': customer_id,
-                                    'customer-name': customer_name,
                                     'environment': env,
                                     'stack': stack,
                                     'managed-by': 'openluffy'
