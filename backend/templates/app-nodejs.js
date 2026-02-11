@@ -1,22 +1,23 @@
-// Sample Node.js Express Application
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
-
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: process.env.SERVICE_NAME || 'api' });
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// Sample API endpoint
-app.get('/api/hello', (req, res) => {
-  res.json({ message: 'Hello from your OpenLuffy-powered application!' });
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Hello from {{CUSTOMER_NAME}}!',
+    environment: process.env.ENVIRONMENT || 'development',
+    version: '1.0.0'
+  });
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.ENVIRONMENT || 'development'}`);
 });
-
-module.exports = app;

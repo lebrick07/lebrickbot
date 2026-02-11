@@ -562,27 +562,33 @@ async def create_customer(request: Request):
             stack_templates = {
                 'nodejs': {
                     '.github/workflows/ci.yaml': 'workflow-nodejs.yaml',
-                    'Dockerfile': 'dockerfile-nodejs',
+                    'Dockerfile': 'Dockerfile-nodejs',
                     'index.js': 'app-nodejs.js',
-                    'package.json': 'package-nodejs.json',
-                    '.gitignore': 'gitignore-nodejs',
-                    'README.md': 'readme.md',
+                    'package.json': 'package.json',
+                    '.gitignore': 'gitignore',
+                    'README.md': 'README.md',
+                    'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                    'k8s/service.yaml': 'k8s-service.yaml',
                 },
                 'python': {
                     '.github/workflows/ci.yaml': 'workflow-python.yaml',
-                    'Dockerfile': 'dockerfile-python',
-                    'main.py': 'app-python.py',
-                    'requirements.txt': 'requirements-python.txt',
-                    '.gitignore': 'gitignore-python',
-                    'README.md': 'readme.md',
+                    'Dockerfile': 'Dockerfile-python',
+                    'app.py': 'app-python.py',
+                    'requirements.txt': 'requirements.txt',
+                    '.gitignore': 'gitignore',
+                    'README.md': 'README.md',
+                    'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                    'k8s/service.yaml': 'k8s-service.yaml',
                 },
-                'go': {
-                    '.github/workflows/ci.yaml': 'workflow-go.yaml',
-                    'Dockerfile': 'dockerfile-go',
-                    'main.go': 'app-go.go',
-                    'go.mod': 'go-mod.txt',
-                    '.gitignore': 'gitignore-go',
-                    'README.md': 'readme.md',
+                'golang': {
+                    '.github/workflows/ci.yaml': 'workflow-golang.yaml',
+                    'Dockerfile': 'Dockerfile-golang',
+                    'main.go': 'app-golang.go',
+                    'go.mod': 'go.mod',
+                    '.gitignore': 'gitignore',
+                    'README.md': 'README.md',
+                    'k8s/deployment.yaml': 'k8s-deployment.yaml',
+                    'k8s/service.yaml': 'k8s-service.yaml',
                 }
             }
             
@@ -623,12 +629,25 @@ Visit: http://localhost:8080'''
                         content = f.read()
                     
                     # Replace placeholders
+                    stack_info = {
+                        'nodejs': {'framework': 'Express.js', 'port': '3000'},
+                        'python': {'framework': 'FastAPI', 'port': '8000'},
+                        'golang': {'framework': 'net/http', 'port': '8080'},
+                    }
+                    
+                    info = stack_info.get(stack, {'framework': 'Unknown', 'port': '8000'})
+                    
                     content = content.replace('{{CUSTOMER_ID}}', customer_id)
                     content = content.replace('{{CUSTOMER_NAME}}', customer_name)
-                    content = content.replace('{{GITHUB_ORG}}', github['org'])
+                    content = content.replace('{{GITHUB_OWNER}}', github['org'])
                     content = content.replace('{{REPO_NAME}}', github['repo'])
                     content = content.replace('{{STACK}}', stack.title())
-                    content = content.replace('{{STACK_INSTRUCTIONS}}', stack_instructions.get(stack, ''))
+                    content = content.replace('{{FRAMEWORK}}', info['framework'])
+                    content = content.replace('{{PORT}}', info['port'])
+                    content = content.replace('{{APP_NAME}}', github['repo'])
+                    content = content.replace('{{NAMESPACE}}', f"{customer_id}-dev")  # Default to dev
+                    content = content.replace('{{ENVIRONMENT}}', 'development')
+                    content = content.replace('{{STACK_SETUP}}', stack_instructions.get(stack, ''))
                     
                     # Push file to GitHub using GitHub API
                     file_url = f"https://api.github.com/repos/{github['org']}/{github['repo']}/contents/{target_path}"

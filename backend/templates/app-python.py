@@ -1,28 +1,27 @@
-# Sample Python FastAPI Application
 from fastapi import FastAPI
-from pydantic import BaseModel
+from datetime import datetime
 import os
+import uvicorn
 
-app = FastAPI(title=os.getenv("SERVICE_NAME", "API"))
+app = FastAPI(title="{{CUSTOMER_NAME}} API")
 
-class HealthResponse(BaseModel):
-    status: str
-    service: str
-
-class MessageResponse(BaseModel):
-    message: str
-
-@app.get("/health", response_model=HealthResponse)
-def health_check():
+@app.get("/healthz")
+async def health_check():
     return {
-        "status": "ok",
-        "service": os.getenv("SERVICE_NAME", "api")
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat()
     }
 
-@app.get("/api/hello", response_model=MessageResponse)
-def hello():
-    return {"message": "Hello from your OpenLuffy-powered application!"}
+@app.get("/")
+async def root():
+    return {
+        "message": "Hello from {{CUSTOMER_NAME}}!",
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "version": "1.0.0"
+    }
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    print(f"Starting server on port {port}")
+    print(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
