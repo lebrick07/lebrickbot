@@ -91,6 +91,9 @@ jobs:
           
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           git commit -m "chore(dev): update image tags to dev-${SHORT_SHA} [skip ci]" || echo "No changes"
+          
+          # Pull with rebase to handle concurrent pushes
+          git pull --rebase origin develop || true
           git push
 
   # Inject secrets into ArgoCD Applications
