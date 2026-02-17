@@ -55,7 +55,7 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
       {/* Logo */}
       <div className="navbar-logo">
         <img 
-          src="/openluffy-logo-transparent.png" 
+          src="/openluffy-logo-navbar.jpg" 
           alt="OpenLuffy" 
           className="logo-image"
         />
