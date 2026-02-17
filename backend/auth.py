@@ -688,3 +688,223 @@ async def bootstrap_create_admin(
         "message": "Admin user created successfully",
         "user": admin_user.to_dict()
     }
+
+
+# ============================================================================
+# USER MANAGEMENT ENDPOINTS (Admin only)
+# ============================================================================
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: str
+    last_name: str
+    role: str = "viewer"  # admin | viewer
+    username: Optional[str] = None
+
+
+class UpdateUserRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/users")
+async def list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    List all users (admin only)
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    
+    return {
+        "users": [
+            {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role,
+                "is_active": user.is_active,
+                "email_verified": user.email_verified,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "last_login": user.last_login.isoformat() if user.last_login else None
+            }
+            for user in users
+        ],
+        "total": len(users)
+    }
+
+
+@router.post("/users")
+async def create_user(
+    request_data: CreateUserRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new user (admin only)
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Validate role
+    if request_data.role not in ["admin", "viewer"]:
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'viewer'")
+    
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == request_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+    
+    # Validate password strength
+    if not validate_password_strength(request_data.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters with uppercase, lowercase, and number"
+        )
+    
+    # Generate username if not provided
+    username = request_data.username or request_data.email.split('@')[0]
+    
+    # Check username uniqueness
+    if db.query(User).filter(User.username == username).first():
+        # Append number to make it unique
+        base_username = username
+        counter = 1
+        while db.query(User).filter(User.username == username).first():
+            username = f"{base_username}{counter}"
+            counter += 1
+    
+    # Create user
+    new_user = User(
+        email=request_data.email,
+        username=username,
+        password_hash=hash_password(request_data.password),
+        first_name=request_data.first_name,
+        last_name=request_data.last_name,
+        role=request_data.role,
+        is_active=True,
+        email_verified=True  # Admin-created users are auto-verified
+    )
+    
+    db.add(new_user)
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.create",
+        resource_type="user",
+        resource_id=str(new_user.id),
+        details={"email": new_user.email, "role": new_user.role, "created_by": current_user.email}
+    )
+    db.add(audit)
+    
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "message": "User created successfully",
+        "user": new_user.to_dict()
+    }
+
+
+@router.patch("/users/{user_id}")
+async def update_user(
+    user_id: int,
+    request_data: UpdateUserRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update user (admin only)
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update fields
+    if request_data.first_name is not None:
+        user.first_name = request_data.first_name
+    if request_data.last_name is not None:
+        user.last_name = request_data.last_name
+    if request_data.role is not None:
+        if request_data.role not in ["admin", "viewer"]:
+            raise HTTPException(status_code=400, detail="Role must be 'admin' or 'viewer'")
+        user.role = request_data.role
+    if request_data.is_active is not None:
+        user.is_active = request_data.is_active
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.update",
+        resource_type="user",
+        resource_id=str(user.id),
+        details={"email": user.email, "updated_by": current_user.email}
+    )
+    db.add(audit)
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "message": "User updated successfully",
+        "user": user.to_dict()
+    }
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete user (admin only)
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent self-deletion
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    # Audit log before deletion
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.delete",
+        resource_type="user",
+        resource_id=str(user.id),
+        details={"email": user.email, "deleted_by": current_user.email}
+    )
+    db.add(audit)
+    
+    # Delete user's sessions
+    db.query(UserSession).filter(UserSession.user_id == user.id).delete()
+    
+    # Delete user
+    db.delete(user)
+    db.commit()
+    
+    return {
+        "message": "User deleted successfully",
+        "deleted_user": {
+            "id": user_id,
+            "email": user.email
+        }
+    }

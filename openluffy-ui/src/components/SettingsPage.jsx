@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { useCustomer } from '../contexts/CustomerContext'
+import { getCurrentUser } from '../utils/auth'
+import UserManagement from './UserManagement'
+import SecretsVariables from './SecretsVariables'
 import './SettingsPage.css'
 
 function SettingsPage() {
   const { activeCustomer } = useCustomer()
+  const currentUser = getCurrentUser()
+  const isAdmin = currentUser?.role === 'admin'
+  
   const [settings, setSettings] = useState({
-    awsAccessKey: '••••••••••••',
-    awsSecretKey: '••••••••••••',
-    githubToken: 'ghp_••••••••••••',
-    slackWebhook: 'https://hooks.slack.com/••••',
     notifyOnDeploy: true,
     notifyOnFailure: true,
     costAlertThreshold: 80,
@@ -84,27 +86,16 @@ function SettingsPage() {
       </div>
 
       <div className="settings-sections">
-        {/* API Keys */}
+        {/* User Management (Admin only) */}
+        {isAdmin && (
+          <section className="settings-section">
+            <UserManagement />
+          </section>
+        )}
+
+        {/* Secrets & Variables */}
         <section className="settings-section">
-          <h3>🔑 API Keys</h3>
-          <div className="settings-grid">
-            <div className="setting-item">
-              <label>AWS Access Key</label>
-              <input type="password" value={settings.awsAccessKey} onChange={(e) => handleChange('awsAccessKey', e.target.value)} />
-            </div>
-            <div className="setting-item">
-              <label>AWS Secret Key</label>
-              <input type="password" value={settings.awsSecretKey} onChange={(e) => handleChange('awsSecretKey', e.target.value)} />
-            </div>
-            <div className="setting-item">
-              <label>GitHub Token</label>
-              <input type="password" value={settings.githubToken} onChange={(e) => handleChange('githubToken', e.target.value)} />
-            </div>
-            <div className="setting-item">
-              <label>Slack Webhook URL</label>
-              <input type="password" value={settings.slackWebhook} onChange={(e) => handleChange('slackWebhook', e.target.value)} />
-            </div>
-          </div>
+          <SecretsVariables />
         </section>
 
         {/* Notifications */}
@@ -153,28 +144,6 @@ function SettingsPage() {
             </div>
           </div>
         </section>
-
-        {/* Team */}
-        <section className="settings-section">
-          <h3>👥 Team Members</h3>
-          <div className="team-list">
-            <div className="team-member">
-              <div className="member-avatar">LB</div>
-              <div className="member-info">
-                <strong>LeBrick</strong>
-                <span>Admin</span>
-              </div>
-              <span className="member-badge">Owner</span>
-            </div>
-          </div>
-          <button className="btn-secondary">+ Invite Member</button>
-        </section>
-
-        {/* Actions */}
-        <div className="settings-actions">
-          <button className="btn-secondary">Cancel</button>
-          <button className="btn-primary">Save Changes</button>
-        </div>
 
         {/* Danger Zone */}
         {activeCustomer && (
