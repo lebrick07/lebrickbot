@@ -45,7 +45,11 @@ function Login({ onLoginSuccess }) {
     <div className="login-container">
       <div className="login-box">
         <div className="login-header">
-          <h1>OpenLuffy</h1>
+          <img 
+            src="/openluffy-logo.jpg" 
+            alt="OpenLuffy" 
+            className="login-logo"
+          />
           <p>Multi-Tenant DevOps Platform</p>
         </div>
 
