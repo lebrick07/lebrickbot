@@ -191,37 +191,63 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
             className="navbar-user"
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
-            <div className="user-avatar">⚔️</div>
+            <div className="user-avatar">👤</div>
             <div className="user-info">
-              <span className="user-name">Captain LeBrick</span>
-              <span className="user-role">Straw Hat Crew</span>
+              <span className="user-name">Hello, LeBrick</span>
             </div>
           </div>
 
           {showUserMenu && (
             <div className="user-menu">
               <div className="user-menu-header">
-                <div className="user-avatar-large">⚔️</div>
+                <div className="user-avatar-large">👤</div>
                 <div>
-                  <div className="user-menu-name">Captain LeBrick</div>
-                  <div className="user-menu-role">Straw Hat Crew</div>
+                  <div className="user-menu-name">lebrick07@gmail.com</div>
                 </div>
               </div>
               <div className="user-menu-items">
-                <button className="user-menu-item">
+                <button 
+                  className="user-menu-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    window.location.href = '/profile'
+                  }}
+                >
                   <span className="menu-icon">👤</span>
                   Profile Settings
                 </button>
-                <button className="user-menu-item">
+                <button 
+                  className="user-menu-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    window.location.href = '/change-password'
+                  }}
+                >
                   <span className="menu-icon">🔑</span>
                   Change Password
                 </button>
-                <button className="user-menu-item">
+                <button 
+                  className="user-menu-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    window.location.href = '/preferences'
+                  }}
+                >
                   <span className="menu-icon">⚙️</span>
                   Preferences
                 </button>
                 <div className="user-menu-divider"></div>
-                <button className="user-menu-item logout-item">
+                <button 
+                  className="user-menu-item logout-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    // Clear auth token
+                    localStorage.removeItem('authToken')
+                    localStorage.removeItem('refreshToken')
+                    // Redirect to login
+                    window.location.href = '/login'
+                  }}
+                >
                   <span className="menu-icon">🚪</span>
                   Logout
                 </button>
