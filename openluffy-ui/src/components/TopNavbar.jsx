@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useCustomer } from '../contexts/CustomerContext'
+import { getCurrentUser, logout } from '../utils/auth'
 import './TopNavbar.css'
 
 function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onToggleSidebar }) {
@@ -10,6 +11,13 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
   const [showCreateMenu, setShowCreateMenu] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentUser, setCurrentUser] = useState(null)
+
+  useEffect(() => {
+    // Get current user on mount
+    const user = getCurrentUser()
+    setCurrentUser(user)
+  }, [])
 
   useEffect(() => {
     // Check system health
@@ -193,7 +201,9 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
           >
             <div className="user-avatar">👤</div>
             <div className="user-info">
-              <span className="user-name">Hello, LeBrick</span>
+              <span className="user-name">
+                Hello, {currentUser?.first_name || currentUser?.username || 'User'}
+              </span>
             </div>
           </div>
 
@@ -202,7 +212,8 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
               <div className="user-menu-header">
                 <div className="user-avatar-large">👤</div>
                 <div>
-                  <div className="user-menu-name">lebrick07@gmail.com</div>
+                  <div className="user-menu-name">{currentUser?.email}</div>
+                  <div className="user-menu-role">{currentUser?.role}</div>
                 </div>
               </div>
               <div className="user-menu-items">
@@ -210,7 +221,8 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
                   className="user-menu-item"
                   onClick={() => {
                     setShowUserMenu(false)
-                    window.location.href = '/profile'
+                    // TODO: Navigate to profile page
+                    alert('Profile settings coming soon')
                   }}
                 >
                   <span className="menu-icon">👤</span>
@@ -220,7 +232,8 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
                   className="user-menu-item"
                   onClick={() => {
                     setShowUserMenu(false)
-                    window.location.href = '/change-password'
+                    // TODO: Navigate to change password page
+                    alert('Change password coming soon')
                   }}
                 >
                   <span className="menu-icon">🔑</span>
@@ -230,7 +243,8 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
                   className="user-menu-item"
                   onClick={() => {
                     setShowUserMenu(false)
-                    window.location.href = '/preferences'
+                    // TODO: Navigate to preferences page
+                    alert('Preferences coming soon')
                   }}
                 >
                   <span className="menu-icon">⚙️</span>
@@ -241,11 +255,8 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
                   className="user-menu-item logout-item"
                   onClick={() => {
                     setShowUserMenu(false)
-                    // Clear auth token
-                    localStorage.removeItem('authToken')
-                    localStorage.removeItem('refreshToken')
-                    // Redirect to login
-                    window.location.href = '/login'
+                    logout()
+                    window.location.reload()
                   }}
                 >
                   <span className="menu-icon">🚪</span>
