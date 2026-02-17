@@ -16,11 +16,30 @@ from luffy_agent import get_agent
 from database import init_db, get_db, check_db_connection, Customer, Integration, ProvisioningStep
 from init_github_integrations import init_github_integrations
 from auth import router as auth_router
+from groups_api import (
+    list_groups, create_group, get_group, update_group, delete_group,
+    add_group_member, remove_group_member,
+    add_group_customer_access, remove_group_customer_access,
+    add_user_customer_access, remove_user_customer_access
+)
 
 app = FastAPI(title="openluffy")
 
 # Include authentication routes
 app.include_router(auth_router)
+
+# Groups and Permissions routes
+app.add_api_route("/api/v1/groups", list_groups, methods=["GET"], tags=["groups"])
+app.add_api_route("/api/v1/groups", create_group, methods=["POST"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}", get_group, methods=["GET"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}", update_group, methods=["PATCH"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}", delete_group, methods=["DELETE"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/members", add_group_member, methods=["POST"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/members/{user_id}", remove_group_member, methods=["DELETE"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/customers", add_group_customer_access, methods=["POST"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/customers/{customer_id}", remove_group_customer_access, methods=["DELETE"], tags=["groups"])
+app.add_api_route("/api/v1/users/{user_id}/customers", add_user_customer_access, methods=["POST"], tags=["users"])
+app.add_api_route("/api/v1/users/{user_id}/customers/{customer_id}", remove_user_customer_access, methods=["DELETE"], tags=["users"])
 
 # Database initialization flag
 db_available = False
