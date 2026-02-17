@@ -24,7 +24,7 @@ from auth_utils import (
     REFRESH_TOKEN_EXPIRE_DAYS
 )
 
-router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+router = APIRouter(prefix="/v1/auth", tags=["authentication"])
 
 
 # Pydantic models for request/response
