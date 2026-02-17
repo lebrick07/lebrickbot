@@ -3,8 +3,7 @@ import { useCustomer } from '../contexts/CustomerContext'
 import './SecretsVariables.css'
 
 function SecretsVariables() {
-  const { activeCustomer, customers } = useCustomer()
-  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const { activeCustomer } = useCustomer()
   
   const [secrets, setSecrets] = useState([
     { id: 1, key: 'AWS_ACCESS_KEY', value: '••••••••••••', type: 'secret', scope: 'all', customer: null },
@@ -30,12 +29,12 @@ function SecretsVariables() {
     customer: null
   })
 
-  // Filter by selected customer (or show global if no customer selected)
-  const customerFilteredSecrets = selectedCustomer === 'global'
-    ? secrets.filter(s => s.customer === null)
-    : selectedCustomer
-      ? secrets.filter(s => s.customer === selectedCustomer || s.customer === null)
-      : secrets.filter(s => s.customer === null)
+  // Use active customer from navbar
+  // If no customer selected (All Customers), show only global secrets
+  // If customer selected, show global + customer-specific secrets
+  const customerFilteredSecrets = activeCustomer
+    ? secrets.filter(s => s.customer === activeCustomer.id || s.customer === null)
+    : secrets.filter(s => s.customer === null)
 
   const filteredSecrets = filterType === 'all' 
     ? customerFilteredSecrets 
@@ -45,7 +44,7 @@ function SecretsVariables() {
     const newEntry = {
       id: Date.now(),
       ...newItem,
-      customer: selectedCustomer === 'global' ? null : selectedCustomer
+      customer: activeCustomer ? activeCustomer.id : null
     }
     setSecrets([...secrets, newEntry])
     setShowAddModal(false)
@@ -65,27 +64,11 @@ function SecretsVariables() {
 
   return (
     <div className="secrets-variables">
-      <div className="section-header">
-        <div>
-          <h3>🔐 Secrets & Variables</h3>
-          <p>Manage environment secrets and configuration variables per customer</p>
-        </div>
-        <button className="btn-primary" onClick={() => setShowAddModal(true)}>
+      <div className="table-header-bar">
+        <h2>Secrets & Variables</h2>
+        <button className="btn-add" onClick={() => setShowAddModal(true)}>
           + Add Secret/Variable
         </button>
-      </div>
-
-      <div className="customer-selector">
-        <label>Customer:</label>
-        <select 
-          value={selectedCustomer || 'global'}
-          onChange={(e) => setSelectedCustomer(e.target.value === 'global' ? 'global' : e.target.value)}
-        >
-          <option value="global">🌍 Global (Platform-wide)</option>
-          {customers.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
       </div>
 
       <div className="filter-tabs">

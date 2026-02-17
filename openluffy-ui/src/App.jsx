@@ -72,11 +72,7 @@ function AppContent() {
       case 'pipelines':
         return <PipelinesView />
       case 'secrets':
-        return (
-          <div className="view-container" style={{ padding: '1.5rem 2rem' }}>
-            <SecretsVariables />
-          </div>
-        )
+        return <SecretsVariables />
       case 'pipeline-config':
         return <PipelineConfig />
       case 'approvals':
