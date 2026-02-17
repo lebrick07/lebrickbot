@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import { CustomerProvider, useCustomer } from './contexts/CustomerContext'
 import TopNavbar from './components/TopNavbar'
@@ -12,6 +12,8 @@ import CreateCustomerWizard from './components/CreateCustomerWizard'
 import AIChatPanel from './components/AIChatPanel'
 import SettingsPage from './components/SettingsPage'
 import ErrorBoundary from './components/ErrorBoundary'
+import Login from './components/Login'
+import { isAuthenticated, getCurrentUser } from './utils/auth'
 
 function AppContent() {
   const { refreshCustomers } = useCustomer()
@@ -222,6 +224,44 @@ function AppContent() {
 }
 
 function App() {
+  const [authenticated, setAuthenticated] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Check if user is authenticated on mount
+    const checkAuth = () => {
+      const isAuth = isAuthenticated()
+      setAuthenticated(isAuth)
+      setLoading(false)
+    }
+
+    checkAuth()
+  }, [])
+
+  const handleLoginSuccess = (user) => {
+    console.log('Login successful:', user)
+    setAuthenticated(true)
+  }
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        background: '#0d1117',
+        color: '#c9d1d9'
+      }}>
+        <div>Loading...</div>
+      </div>
+    )
+  }
+
+  if (!authenticated) {
+    return <Login onLoginSuccess={handleLoginSuccess} />
+  }
+
   return (
     <ErrorBoundary>
       <CustomerProvider>

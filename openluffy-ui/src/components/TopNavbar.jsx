@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useCustomer } from '../contexts/CustomerContext'
+import { getCurrentUser, logout } from '../utils/auth'
+import { API_BASE_URL } from '../config/api'
 import './TopNavbar.css'
 
 function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onToggleSidebar }) {
@@ -10,10 +12,17 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
   const [showCreateMenu, setShowCreateMenu] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentUser, setCurrentUser] = useState(null)
+
+  useEffect(() => {
+    // Get current user on mount
+    const user = getCurrentUser()
+    setCurrentUser(user)
+  }, [])
 
   useEffect(() => {
     // Check system health
-    fetch('http://localhost:8000/health')
+    fetch(`${API_BASE_URL}/health`)
       .then(res => res.json())
       .then(data => {
         setSystemStatus({ healthy: data.status === 'healthy', loading: false })
@@ -23,7 +32,7 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
       })
 
     // Fetch notifications (pending approvals count)
-    fetch('http://localhost:8000/pending-approvals')
+    fetch(`${API_BASE_URL}/pending-approvals`)
       .then(res => res.json())
       .then(data => {
         if (data.approvals && data.approvals.length > 0) {
@@ -43,6 +52,15 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
         <span className="hamburger-line"></span>
         <span className="hamburger-line"></span>
       </button>
+
+      {/* Logo */}
+      <div className="navbar-logo">
+        <img 
+          src="/openluffy-logo-navbar.jpg" 
+          alt="OpenLuffy" 
+          className="logo-image"
+        />
+      </div>
 
       {/* Left Section: Filters */}
       <div className="navbar-left">
@@ -191,37 +209,66 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
             className="navbar-user"
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
-            <div className="user-avatar">⚔️</div>
+            <div className="user-avatar">👤</div>
             <div className="user-info">
-              <span className="user-name">Captain LeBrick</span>
-              <span className="user-role">Straw Hat Crew</span>
+              <span className="user-name">
+                Hello, {currentUser?.first_name || currentUser?.username || 'User'}
+              </span>
             </div>
           </div>
 
           {showUserMenu && (
             <div className="user-menu">
               <div className="user-menu-header">
-                <div className="user-avatar-large">⚔️</div>
+                <div className="user-avatar-large">👤</div>
                 <div>
-                  <div className="user-menu-name">Captain LeBrick</div>
-                  <div className="user-menu-role">Straw Hat Crew</div>
+                  <div className="user-menu-name">{currentUser?.email}</div>
+                  <div className="user-menu-role">{currentUser?.role}</div>
                 </div>
               </div>
               <div className="user-menu-items">
-                <button className="user-menu-item">
+                <button 
+                  className="user-menu-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    // TODO: Navigate to profile page
+                    alert('Profile settings coming soon')
+                  }}
+                >
                   <span className="menu-icon">👤</span>
                   Profile Settings
                 </button>
-                <button className="user-menu-item">
+                <button 
+                  className="user-menu-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    // TODO: Navigate to change password page
+                    alert('Change password coming soon')
+                  }}
+                >
                   <span className="menu-icon">🔑</span>
                   Change Password
                 </button>
-                <button className="user-menu-item">
+                <button 
+                  className="user-menu-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    // TODO: Navigate to preferences page
+                    alert('Preferences coming soon')
+                  }}
+                >
                   <span className="menu-icon">⚙️</span>
                   Preferences
                 </button>
                 <div className="user-menu-divider"></div>
-                <button className="user-menu-item logout-item">
+                <button 
+                  className="user-menu-item logout-item"
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    logout()
+                    window.location.reload()
+                  }}
+                >
                   <span className="menu-icon">🚪</span>
                   Logout
                 </button>

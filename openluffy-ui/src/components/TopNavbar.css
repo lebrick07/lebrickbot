@@ -13,6 +13,20 @@
   gap: 1rem;
 }
 
+/* Logo */
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 0.5rem;
+}
+
+.logo-image {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+
 /* Left Section: Filters */
 .navbar-left {
   display: flex;
