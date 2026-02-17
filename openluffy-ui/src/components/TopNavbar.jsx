@@ -52,6 +52,15 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
         <span className="hamburger-line"></span>
       </button>
 
+      {/* Logo */}
+      <div className="navbar-logo">
+        <img 
+          src="/openluffy-logo-transparent.png" 
+          alt="OpenLuffy" 
+          className="logo-image"
+        />
+      </div>
+
       {/* Left Section: Filters */}
       <div className="navbar-left">
         <div className="navbar-filters">
