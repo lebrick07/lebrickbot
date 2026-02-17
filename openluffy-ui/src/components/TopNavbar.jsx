@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useCustomer } from '../contexts/CustomerContext'
 import { getCurrentUser, logout } from '../utils/auth'
+import { API_BASE_URL } from '../config/api'
 import './TopNavbar.css'
 
 function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onToggleSidebar }) {
@@ -21,7 +22,7 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
 
   useEffect(() => {
     // Check system health
-    fetch('http://localhost:8000/health')
+    fetch(`${API_BASE_URL}/health`)
       .then(res => res.json())
       .then(data => {
         setSystemStatus({ healthy: data.status === 'healthy', loading: false })
@@ -31,7 +32,7 @@ function TopNavbar({ onCreateNew, selectedEnvironment, onEnvironmentChange, onTo
       })
 
     // Fetch notifications (pending approvals count)
-    fetch('http://localhost:8000/pending-approvals')
+    fetch(`${API_BASE_URL}/pending-approvals`)
       .then(res => res.json())
       .then(data => {
         if (data.approvals && data.approvals.length > 0) {

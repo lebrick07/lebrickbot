@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { API_BASE_URL } from '../config/api'
 import './Login.css'
 
 function Login({ onLoginSuccess }) {
@@ -13,7 +14,7 @@ function Login({ onLoginSuccess }) {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,7 +47,7 @@ function Login({ onLoginSuccess }) {
       <div className="login-box">
         <div className="login-header">
           <img 
-            src="/openluffy-logo.jpg" 
+            src="/openluffy-logo-navbar.jpg" 
             alt="OpenLuffy" 
             className="login-logo"
           />
