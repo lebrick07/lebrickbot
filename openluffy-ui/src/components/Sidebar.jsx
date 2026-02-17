@@ -1,9 +1,6 @@
-import { useState } from 'react'
 import './Sidebar.css'
 
 function Sidebar({ activeView, onViewChange, isOpen = false }) {
-  const [collapsed, setCollapsed] = useState(false)
-
   const menuItems = [
     {
       id: 'applications',
@@ -56,20 +53,9 @@ function Sidebar({ activeView, onViewChange, isOpen = false }) {
   ]
 
   return (
-    <div className={`sidebar ${collapsed ? 'collapsed' : ''} ${isOpen ? 'open' : ''}`}>
+    <div className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
-        {!collapsed ? (
-          <span className="sidebar-brand">Luffy DevOps</span>
-        ) : (
-          <span className="sidebar-brand-icon">⚔️</span>
-        )}
-        <button 
-          className="collapse-btn"
-          onClick={() => setCollapsed(!collapsed)}
-          title={collapsed ? 'Expand' : 'Collapse'}
-        >
-          {collapsed ? '→' : '←'}
-        </button>
+        <span className="sidebar-brand">Luffy DevOps</span>
       </div>
 
       <nav className="sidebar-nav">
@@ -78,15 +64,12 @@ function Sidebar({ activeView, onViewChange, isOpen = false }) {
             key={item.id}
             className={`nav-item ${activeView === item.id ? 'active' : ''}`}
             onClick={() => onViewChange(item.id)}
-            title={collapsed ? item.label : ''}
           >
             <span className="nav-icon">{item.icon}</span>
-            {!collapsed && (
-              <div className="nav-content">
-                <span className="nav-label">{item.label}</span>
-                <span className="nav-description">{item.description}</span>
-              </div>
-            )}
+            <div className="nav-content">
+              <span className="nav-label">{item.label}</span>
+              <span className="nav-description">{item.description}</span>
+            </div>
           </button>
         ))}
       </nav>

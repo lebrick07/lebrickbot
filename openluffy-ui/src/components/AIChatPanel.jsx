@@ -179,7 +179,7 @@ function AIChatPanel({ onCollapse }) {
     <div className="ai-chat-panel split-panel">
       <div className="ai-chat-header">
         <div className="ai-header-left">
-          <span className="ai-icon">⚔️</span>
+          <span className="ai-icon">🤖</span>
           <div>
             <h3>Luffy – Captain's Deck</h3>
             <span className="ai-context">{getContextString()}</span>
