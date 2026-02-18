@@ -16,11 +16,56 @@ from luffy_agent import get_agent
 from database import init_db, get_db, check_db_connection, Customer, Integration, ProvisioningStep
 from init_github_integrations import init_github_integrations
 from auth import router as auth_router
+from groups_api import (
+    list_groups, create_group, get_group, update_group, delete_group,
+    add_group_member, remove_group_member,
+    add_group_customer_access, remove_group_customer_access,
+    add_user_customer_access, remove_user_customer_access
+)
+from api_tokens import (
+    list_api_tokens, create_api_token, get_api_token, update_api_token,
+    revoke_api_token, rotate_api_token, list_available_scopes
+)
+from danger_zone import (
+    delete_all_deployments, reset_all_secrets, disable_customer,
+    delete_customer_permanently, transfer_customer_ownership,
+    revoke_all_customer_tokens
+)
 
 app = FastAPI(title="openluffy")
 
 # Include authentication routes
 app.include_router(auth_router)
+
+# Groups and Permissions routes
+app.add_api_route("/api/v1/groups", list_groups, methods=["GET"], tags=["groups"])
+app.add_api_route("/api/v1/groups", create_group, methods=["POST"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}", get_group, methods=["GET"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}", update_group, methods=["PATCH"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}", delete_group, methods=["DELETE"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/members", add_group_member, methods=["POST"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/members/{user_id}", remove_group_member, methods=["DELETE"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/customers", add_group_customer_access, methods=["POST"], tags=["groups"])
+app.add_api_route("/api/v1/groups/{group_id}/customers/{customer_id}", remove_group_customer_access, methods=["DELETE"], tags=["groups"])
+app.add_api_route("/api/v1/users/{user_id}/customers", add_user_customer_access, methods=["POST"], tags=["users"])
+app.add_api_route("/api/v1/users/{user_id}/customers/{customer_id}", remove_user_customer_access, methods=["DELETE"], tags=["users"])
+
+# API Tokens routes
+app.add_api_route("/api/v1/tokens", list_api_tokens, methods=["GET"], tags=["tokens"])
+app.add_api_route("/api/v1/tokens", create_api_token, methods=["POST"], tags=["tokens"])
+app.add_api_route("/api/v1/tokens/scopes", list_available_scopes, methods=["GET"], tags=["tokens"])
+app.add_api_route("/api/v1/tokens/{token_id}", get_api_token, methods=["GET"], tags=["tokens"])
+app.add_api_route("/api/v1/tokens/{token_id}", update_api_token, methods=["PATCH"], tags=["tokens"])
+app.add_api_route("/api/v1/tokens/{token_id}", revoke_api_token, methods=["DELETE"], tags=["tokens"])
+app.add_api_route("/api/v1/tokens/{token_id}/rotate", rotate_api_token, methods=["POST"], tags=["tokens"])
+
+# Danger Zone routes (per-customer destructive actions)
+app.add_api_route("/api/v1/customers/{customer_id}/danger-zone/delete-deployments", delete_all_deployments, methods=["POST"], tags=["danger-zone"])
+app.add_api_route("/api/v1/customers/{customer_id}/danger-zone/reset-secrets", reset_all_secrets, methods=["POST"], tags=["danger-zone"])
+app.add_api_route("/api/v1/customers/{customer_id}/danger-zone/disable", disable_customer, methods=["POST"], tags=["danger-zone"])
+app.add_api_route("/api/v1/customers/{customer_id}/danger-zone/delete-permanent", delete_customer_permanently, methods=["POST"], tags=["danger-zone"])
+app.add_api_route("/api/v1/customers/{customer_id}/danger-zone/transfer-ownership", transfer_customer_ownership, methods=["POST"], tags=["danger-zone"])
+app.add_api_route("/api/v1/customers/{customer_id}/danger-zone/revoke-tokens", revoke_all_customer_tokens, methods=["POST"], tags=["danger-zone"])
 
 # Database initialization flag
 db_available = False

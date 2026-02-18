@@ -126,6 +126,9 @@ class User(Base):
     # Relationships
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user")
+    group_memberships = relationship("UserGroup", cascade="all, delete-orphan")
+    customer_access = relationship("UserCustomerAccess", cascade="all, delete-orphan")
+    api_tokens = relationship("APIToken", back_populates="user", cascade="all, delete-orphan")
     
     def to_dict(self, include_sensitive=False):
         data = {
@@ -214,3 +217,128 @@ class AuditLog(Base):
             'details': self.details,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }
+
+
+# ============================================================================
+# GROUPS AND PERMISSIONS
+# ============================================================================
+
+class Group(Base):
+    """User groups for permission management"""
+    __tablename__ = 'groups'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user_associations = relationship("UserGroup", back_populates="group", cascade="all, delete-orphan")
+    customer_access = relationship("GroupCustomerAccess", back_populates="group", cascade="all, delete-orphan")
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class UserGroup(Base):
+    """Many-to-many: Users ↔ Groups"""
+    __tablename__ = 'user_groups'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    group_id = Column(Integer, ForeignKey('groups.id'), nullable=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    group = relationship("Group", back_populates="user_associations")
+
+
+class GroupCustomerAccess(Base):
+    """Which customers a group can access"""
+    __tablename__ = 'group_customer_access'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(Integer, ForeignKey('groups.id'), nullable=False)
+    customer_id = Column(String(100), ForeignKey('customers.id'), nullable=False)
+    granted_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    group = relationship("Group", back_populates="customer_access")
+    customer = relationship("Customer")
+
+
+class UserCustomerAccess(Base):
+    """Direct customer access for individual users (overrides group access)"""
+    __tablename__ = 'user_customer_access'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    customer_id = Column(String(100), ForeignKey('customers.id'), nullable=False)
+    granted_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    customer = relationship("Customer")
+
+
+# ============================================================================
+# API TOKENS
+# ============================================================================
+
+class APIToken(Base):
+    """API tokens for programmatic access"""
+    __tablename__ = 'api_tokens'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Token identification
+    name = Column(String(200), nullable=False)  # User-friendly name (e.g., "CI/CD Pipeline", "Monitoring Script")
+    token_prefix = Column(String(20), nullable=False, index=True)  # First 8 chars for display (e.g., "olf_dev_")
+    token_hash = Column(String(255), nullable=False, unique=True)  # Bcrypt hash of full token
+    
+    # Permissions
+    scopes = Column(JSON, nullable=False)  # ["customers:read", "deployments:write", etc.]
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    expires_at = Column(DateTime, nullable=True)  # Null = never expires
+    
+    # Usage tracking
+    last_used_at = Column(DateTime, nullable=True)
+    last_used_ip = Column(String(45), nullable=True)
+    use_count = Column(Integer, default=0)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    revoked_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="api_tokens")
+    
+    def to_dict(self, include_hash=False):
+        data = {
+            'id': self.id,
+            'user_id': self.user_id,
+            'name': self.name,
+            'token_prefix': self.token_prefix,
+            'scopes': self.scopes,
+            'is_active': self.is_active,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            'last_used_ip': self.last_used_ip,
+            'use_count': self.use_count,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'revoked_at': self.revoked_at.isoformat() if self.revoked_at else None
+        }
+        if include_hash:
+            data['token_hash'] = self.token_hash
+        return data

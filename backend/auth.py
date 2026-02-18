@@ -24,7 +24,7 @@ from auth_utils import (
     REFRESH_TOKEN_EXPIRE_DAYS
 )
 
-router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+router = APIRouter(prefix="/v1/auth", tags=["authentication"])
 
 
 # Pydantic models for request/response
@@ -73,12 +73,22 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Dependency to extract and validate JWT token, return current user
+    Dependency to extract and validate JWT or API token, return current user
+    Supports both JWT (standard sessions) and API tokens (programmatic access)
     """
     token = extract_bearer_token(authorization)
     if not token:
         raise HTTPException(status_code=401, detail="Missing authentication token")
     
+    # Try API token authentication first (tokens starting with "olf_")
+    if token.startswith("olf_"):
+        from api_tokens import get_current_user_from_token
+        user = await get_current_user_from_token(authorization, db)
+        if user:
+            return user
+        raise HTTPException(status_code=401, detail="Invalid API token")
+    
+    # Fall back to JWT authentication
     payload = decode_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -116,6 +126,15 @@ async def get_current_user(
     db.commit()
     
     return user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Dependency that requires user to be admin
+    """
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -222,13 +241,21 @@ async def login(
     """
     Login with email and password
     """
+    # DEBUG: Log incoming request
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"LOGIN ATTEMPT: email='{request_data.email}' password_len={len(request_data.password)} password_repr={repr(request_data.password)}")
+    
     # Find user
     user = db.query(User).filter(User.email == request_data.email).first()
     if not user:
+        logger.warning(f"LOGIN FAILED: User not found for email '{request_data.email}'")
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Verify password
-    if not verify_password(request_data.password, user.password_hash):
+    password_valid = verify_password(request_data.password, user.password_hash)
+    if not password_valid:
+        logger.warning(f"LOGIN FAILED: Invalid password for '{request_data.email}'. Password received: {repr(request_data.password[:5])}... (len={len(request_data.password)})")
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Check if user is active
@@ -688,3 +715,561 @@ async def bootstrap_create_admin(
         "message": "Admin user created successfully",
         "user": admin_user.to_dict()
     }
+
+
+# ============================================================================
+# USER MANAGEMENT ENDPOINTS (Admin only)
+# ============================================================================
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: str
+    last_name: str
+    role: str = "viewer"  # admin | viewer
+    username: Optional[str] = None
+
+
+class UpdateUserRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/users")
+async def list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    List all users with their groups and customer access (admin only)
+    """
+    from database import UserGroup, UserCustomerAccess, Group
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    
+    result = []
+    for user in users:
+        # Get user's groups
+        groups = db.query(Group).join(UserGroup).filter(UserGroup.user_id == user.id).all()
+        
+        # Get user's direct customer access
+        customer_access = db.query(UserCustomerAccess).filter(UserCustomerAccess.user_id == user.id).all()
+        
+        user_dict = {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+            "is_active": user.is_active,
+            "email_verified": user.email_verified,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "last_login": user.last_login.isoformat() if user.last_login else None,
+            "groups": [{"id": g.id, "name": g.name} for g in groups],
+            "customer_access": [access.customer_id for access in customer_access]
+        }
+        result.append(user_dict)
+    
+    return {
+        "users": result,
+        "total": len(result)
+    }
+
+
+@router.post("/users")
+async def create_user(
+    request_data: CreateUserRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new user (admin only)
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Validate role
+    if request_data.role not in ["admin", "viewer"]:
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'viewer'")
+    
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == request_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+    
+    # Validate password strength
+    if not validate_password_strength(request_data.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters with uppercase, lowercase, and number"
+        )
+    
+    # Generate username if not provided
+    username = request_data.username or request_data.email.split('@')[0]
+    
+    # Check username uniqueness
+    if db.query(User).filter(User.username == username).first():
+        # Append number to make it unique
+        base_username = username
+        counter = 1
+        while db.query(User).filter(User.username == username).first():
+            username = f"{base_username}{counter}"
+            counter += 1
+    
+    # Create user
+    new_user = User(
+        email=request_data.email,
+        username=username,
+        password_hash=hash_password(request_data.password),
+        first_name=request_data.first_name,
+        last_name=request_data.last_name,
+        role=request_data.role,
+        is_active=True,
+        email_verified=True  # Admin-created users are auto-verified
+    )
+    
+    db.add(new_user)
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.create",
+        resource_type="user",
+        resource_id=str(new_user.id),
+        details={"email": new_user.email, "role": new_user.role, "created_by": current_user.email}
+    )
+    db.add(audit)
+    
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "message": "User created successfully",
+        "user": new_user.to_dict()
+    }
+
+
+@router.patch("/users/{user_id}")
+async def update_user(
+    user_id: int,
+    request_data: UpdateUserRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update user (admin only)
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update fields
+    if request_data.first_name is not None:
+        user.first_name = request_data.first_name
+    if request_data.last_name is not None:
+        user.last_name = request_data.last_name
+    if request_data.role is not None:
+        if request_data.role not in ["admin", "viewer"]:
+            raise HTTPException(status_code=400, detail="Role must be 'admin' or 'viewer'")
+        user.role = request_data.role
+    if request_data.is_active is not None:
+        user.is_active = request_data.is_active
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.update",
+        resource_type="user",
+        resource_id=str(user.id),
+        details={"email": user.email, "updated_by": current_user.email}
+    )
+    db.add(audit)
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "message": "User updated successfully",
+        "user": user.to_dict()
+    }
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete user (admin only)
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent self-deletion
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    # Prevent deleting the last admin
+    if user.role == "admin":
+        admin_count = db.query(User).filter(User.role == "admin", User.is_active == True).count()
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot delete the only admin user. Create another admin first."
+            )
+    
+    # Audit log before deletion
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.delete",
+        resource_type="user",
+        resource_id=str(user.id),
+        details={"email": user.email, "deleted_by": current_user.email}
+    )
+    db.add(audit)
+    
+    # Delete user's sessions
+    db.query(UserSession).filter(UserSession.user_id == user.id).delete()
+    
+    # Delete user
+    db.delete(user)
+    db.commit()
+    
+    return {
+        "message": "User deleted successfully",
+        "deleted_user": {
+            "id": user_id,
+            "email": user.email
+        }
+    }
+
+
+# ============================================================================
+# GROUP MANAGEMENT ENDPOINTS (Admin only)
+# ============================================================================
+
+class CreateGroupRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class UpdateGroupRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+@router.get("/groups")
+async def list_groups(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    List all groups (admin only)
+    """
+    from database import Group, UserGroup
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    groups = db.query(Group).order_by(Group.name).all()
+    
+    result = []
+    for group in groups:
+        # Count users in group
+        user_count = db.query(UserGroup).filter(UserGroup.group_id == group.id).count()
+        
+        group_dict = group.to_dict()
+        group_dict['user_count'] = user_count
+        result.append(group_dict)
+    
+    return {
+        "groups": result,
+        "total": len(result)
+    }
+
+
+@router.post("/groups")
+async def create_group(
+    request_data: CreateGroupRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new group (admin only)
+    """
+    from database import Group
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if group already exists
+    existing = db.query(Group).filter(Group.name == request_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Group with this name already exists")
+    
+    # Create group
+    new_group = Group(
+        name=request_data.name,
+        description=request_data.description
+    )
+    
+    db.add(new_group)
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="group.create",
+        resource_type="group",
+        resource_id=str(new_group.id),
+        details={"name": new_group.name}
+    )
+    db.add(audit)
+    
+    db.commit()
+    db.refresh(new_group)
+    
+    return {
+        "message": "Group created successfully",
+        "group": new_group.to_dict()
+    }
+
+
+@router.delete("/groups/{group_id}")
+async def delete_group(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a group (admin only)
+    """
+    from database import Group, UserGroup, GroupCustomerAccess
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Audit log before deletion
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="group.delete",
+        resource_type="group",
+        resource_id=str(group.id),
+        details={"name": group.name}
+    )
+    db.add(audit)
+    
+    # Delete associations
+    db.query(UserGroup).filter(UserGroup.group_id == group_id).delete()
+    db.query(GroupCustomerAccess).filter(GroupCustomerAccess.group_id == group_id).delete()
+    
+    # Delete group
+    db.delete(group)
+    db.commit()
+    
+    return {
+        "message": "Group deleted successfully",
+        "deleted_group": {
+            "id": group_id,
+            "name": group.name
+        }
+    }
+
+
+@router.post("/users/{user_id}/groups/{group_id}")
+async def add_user_to_group(
+    user_id: int,
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Add user to group (admin only)
+    """
+    from database import Group, UserGroup
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Check if already member
+    existing = db.query(UserGroup).filter(
+        UserGroup.user_id == user_id,
+        UserGroup.group_id == group_id
+    ).first()
+    
+    if existing:
+        return {"message": "User already in group"}
+    
+    # Add membership
+    membership = UserGroup(user_id=user_id, group_id=group_id)
+    db.add(membership)
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.add_to_group",
+        resource_type="user",
+        resource_id=str(user.id),
+        details={"group": group.name}
+    )
+    db.add(audit)
+    
+    db.commit()
+    
+    return {"message": "User added to group"}
+
+
+@router.delete("/users/{user_id}/groups/{group_id}")
+async def remove_user_from_group(
+    user_id: int,
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Remove user from group (admin only)
+    """
+    from database import Group, UserGroup
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    membership = db.query(UserGroup).filter(
+        UserGroup.user_id == user_id,
+        UserGroup.group_id == group_id
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=404, detail="User not in this group")
+    
+    group = db.query(Group).filter(Group.id == group_id).first()
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.remove_from_group",
+        resource_type="user",
+        resource_id=str(user_id),
+        details={"group": group.name if group else str(group_id)}
+    )
+    db.add(audit)
+    
+    db.delete(membership)
+    db.commit()
+    
+    return {"message": "User removed from group"}
+
+
+@router.post("/users/{user_id}/customers/{customer_id}")
+async def grant_customer_access(
+    user_id: int,
+    customer_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Grant user access to specific customer (admin only)
+    """
+    from database import UserCustomerAccess, Customer
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Check if already granted
+    existing = db.query(UserCustomerAccess).filter(
+        UserCustomerAccess.user_id == user_id,
+        UserCustomerAccess.customer_id == customer_id
+    ).first()
+    
+    if existing:
+        return {"message": "Access already granted"}
+    
+    # Grant access
+    access = UserCustomerAccess(user_id=user_id, customer_id=customer_id)
+    db.add(access)
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.grant_customer_access",
+        resource_type="user",
+        resource_id=str(user.id),
+        details={"customer": customer_id}
+    )
+    db.add(audit)
+    
+    db.commit()
+    
+    return {"message": "Customer access granted"}
+
+
+@router.delete("/users/{user_id}/customers/{customer_id}")
+async def revoke_customer_access(
+    user_id: int,
+    customer_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revoke user access to specific customer (admin only)
+    """
+    from database import UserCustomerAccess
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    access = db.query(UserCustomerAccess).filter(
+        UserCustomerAccess.user_id == user_id,
+        UserCustomerAccess.customer_id == customer_id
+    ).first()
+    
+    if not access:
+        raise HTTPException(status_code=404, detail="Access not found")
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="user.revoke_customer_access",
+        resource_type="user",
+        resource_id=str(user_id),
+        details={"customer": customer_id}
+    )
+    db.add(audit)
+    
+    db.delete(access)
+    db.commit()
+    
+    return {"message": "Customer access revoked"}

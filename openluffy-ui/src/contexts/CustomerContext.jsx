@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { API_BASE_URL } from '../config/api'
 
 const CustomerContext = createContext()
 
@@ -21,7 +22,7 @@ export const CustomerProvider = ({ children }) => {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch('/api/customers')
+      const res = await fetch(`${API_BASE_URL}/api/customers`)
       const data = await res.json()
       setCustomers(data.customers || [])
     } catch (err) {
