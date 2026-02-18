@@ -128,6 +128,15 @@ async def get_current_user(
     return user
 
 
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Dependency that requires user to be admin
+    """
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
 @router.post("/register", response_model=TokenResponse)
 async def register(
     request_data: RegisterRequest,
