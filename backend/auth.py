@@ -662,14 +662,18 @@ async def bootstrap_create_admin(
 ):
     """
     Bootstrap endpoint to create the first admin user
-    Only works if no admin users exist in the system
+    
+    This endpoint is ONLY available when the database is completely empty (no users exist).
+    Each deployment of OpenLuffy is independent - this endpoint must be called once per deployment.
+    
+    After the first admin user is created, use /v1/auth/users to create additional users.
     """
-    # Check if any admin user already exists
-    existing_admin = db.query(User).filter(User.role == 'admin').first()
-    if existing_admin:
+    # Check if ANY users exist - bootstrap only works on empty database
+    user_count = db.query(User).count()
+    if user_count > 0:
         raise HTTPException(
             status_code=403, 
-            detail="Admin user already exists. Use normal registration for additional users."
+            detail="Bootstrap already complete. This instance has been initialized. Use /v1/auth/users to create additional users (admin access required)."
         )
     
     # Validate password strength
